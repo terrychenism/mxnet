@@ -5,68 +5,22 @@ sys.path.insert(0, os.path.join(curr_path, '../unittest'))
 from test_operator import *
 import mxnet as mx
 import numpy as np
+from mxnet.test_utils import check_consistency, set_default_context
 from numpy.testing import assert_allclose
 import time
 
-def check_consistency(sym, ctx_list, scale=1.0, grad_req='write'):
-    tol = {np.dtype(np.float16): 1e-1,
-           np.dtype(np.float32): 1e-3,
-           np.dtype(np.float64): 1e-5,
-           np.dtype(np.uint8): 0,
-           np.dtype(np.int32): 0}
-    assert(len(ctx_list) > 1)
-    exe_list = [sym.simple_bind(grad_req=grad_req, **ctx) for ctx in ctx_list]
-    for exe in exe_list:
-        assert(len(exe.outputs) == 1)
-        assert(len(exe.arg_arrays) == len(exe_list[0].arg_arrays))
-        assert(len(exe.grad_arrays) == len(exe_list[0].grad_arrays))
+set_default_context(mx.gpu(0))
+del test_support_vector_machine_l1_svm
+del test_support_vector_machine_l2_svm
 
-    init = [np.random.normal(size=arr.shape, scale=scale) for arr in exe_list[0].arg_arrays]
-    if sym.name == 'embedding':
-        init[0] = np.random.randint(low=0, high=10, size=exe_list[0].arg_arrays[0].shape)
+def test_batchnorm_with_type():
+    sym = mx.sym.BatchNorm(name='norm', fix_gamma=False)
+    ctx_list = [{'ctx': mx.gpu(0), 'norm_data': (10, 2, 10, 10), 'type_dict': {'norm_data': np.float32}},
+                {'ctx': mx.cpu(0), 'norm_data': (10, 2, 10, 10), 'type_dict': {'norm_data': np.float32}}]
+    check_consistency(sym, ctx_list)
 
-    for exe in exe_list:
-        for arr, iarr in zip(exe.arg_arrays, init):
-            arr[:] = iarr.astype(arr.dtype)
-
-    # forward
-    for exe in exe_list:
-        exe.forward(is_train=True)
-        exe.backward(exe.outputs[0])
-
-    outputs = [exe.outputs[0].asnumpy() for exe in exe_list]
-    # lazy solution handling None grad
-    grads = [[grad.asnumpy() if grad is not None else np.zeros(1) for grad in exe.grad_arrays] for exe in exe_list]
-    dtypes = [arr.dtype for arr in outputs]
-    max_idx = np.argmax(dtypes)
-
-    for i, exe in enumerate(exe_list):
-        if i == max_idx:
-            continue
-        for arr1, arr2 in zip([outputs[i]]+grads[i], [outputs[max_idx]]+grads[max_idx]):
-            arr2 = arr2.astype(dtypes[i])
-            try:
-                assert_allclose(arr1, arr2, rtol=tol[dtypes[i]], atol=tol[dtypes[i]])
-            except Exception, e:
-                print e
-
-def check_speed(sym, ctx, scale=1.0, N=100, grad_req='write'):
-    exe = sym.simple_bind(grad_req=grad_req, **ctx)
-    init = [np.random.normal(size=arr.shape, scale=scale) for arr in exe.arg_arrays]
-    for arr, iarr in zip(exe.arg_arrays, init):
-        arr[:] = iarr.astype(arr.dtype)
-
-    # warm up
-    exe.forward(is_train=True)
-    exe.backward(exe.outputs[0])
-    exe.outputs[0].wait_to_read()
-
-    tic = time.time()
-    for i in range(N):
-        exe.forward(is_train=True)
-        exe.backward(exe.outputs[0])
-        exe.outputs[0].wait_to_read()
-    return (time.time() - tic)*1.0/N
+    sym = mx.sym.BatchNorm(name='norm', fix_gamma=True)
+    check_consistency(sym, ctx_list)
 
 def test_convolution_with_type():
     sym = mx.sym.Convolution(num_filter=3, kernel=(3,3), name='conv')
@@ -84,6 +38,25 @@ def test_deconvolution_with_type():
                 {'ctx': mx.gpu(0), 'deconv_data': (2, 2, 10, 10), 'type_dict': {'deconv_data': np.float16}},
                 {'ctx': mx.cpu(0), 'deconv_data': (2, 2, 10, 10), 'type_dict': {'deconv_data': np.float64}},
                 {'ctx': mx.cpu(0), 'deconv_data': (2, 2, 10, 10), 'type_dict': {'deconv_data': np.float32}}]
+    check_consistency(sym, ctx_list)
+
+def test_pooling_with_type():
+    ctx_list = [{'ctx': mx.gpu(0), 'pool_data': (10, 2, 10, 10), 'type_dict': {'pool_data': np.float64}},
+                {'ctx': mx.gpu(0), 'pool_data': (10, 2, 10, 10), 'type_dict': {'pool_data': np.float32}},
+                {'ctx': mx.gpu(0), 'pool_data': (10, 2, 10, 10), 'type_dict': {'pool_data': np.float16}},
+                {'ctx': mx.cpu(0), 'pool_data': (10, 2, 10, 10), 'type_dict': {'pool_data': np.float64}},
+                {'ctx': mx.cpu(0), 'pool_data': (10, 2, 10, 10), 'type_dict': {'pool_data': np.float32}}]
+
+    sym = mx.sym.Pooling(name='pool', kernel=(3,3), stride=(2,2), pool_type='max')
+    check_consistency(sym, ctx_list)
+
+    sym = mx.sym.Pooling(name='pool', kernel=(3,3), pad=(1,1), pool_type='avg')
+    check_consistency(sym, ctx_list)
+
+    sym = mx.sym.Pooling(name='pool', kernel=(5,5), pad=(2,2), pool_type='max')
+    check_consistency(sym, ctx_list)
+
+    sym = mx.sym.Pooling(name='pool', kernel=(3,3), pad=(1,1), pool_type='sum')
     check_consistency(sym, ctx_list)
 
 def test_upsampling_with_type():
@@ -178,9 +151,13 @@ def test_embedding_with_type():
                 {'ctx': mx.cpu(0), 'embedding_data': (2, 10), 'type_dict': {'embedding_data': np.float64}},
                 {'ctx': mx.cpu(0), 'embedding_data': (2, 10), 'type_dict': {'embedding_data': np.float32}},
                 {'ctx': mx.cpu(0), 'embedding_data': (2, 10), 'type_dict': {'embedding_data': np.float16}}]
-    check_consistency(sym, ctx_list, grad_req={'embedding_data': 'null','embedding_weight': 'write'})
+    arg_params = {'embedding_data': np.random.randint(low=0, high=10, size=(2, 10))}
+    check_consistency(sym, ctx_list, grad_req={'embedding_data': 'null','embedding_weight': 'write'},
+                      arg_params=arg_params)
 
 if __name__ == '__main__':
+    test_pooling_with_type()
+    test_batchnorm_with_type()
     test_convolution_with_type()
     test_deconvolution_with_type()
     test_upsampling_with_type()

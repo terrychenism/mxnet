@@ -5,7 +5,8 @@ from __future__ import absolute_import
 
 import ctypes
 from .base import _LIB, check_call
-from .ndarray import NDArray, empty
+from .ndarray import empty
+from . import _ndarray_internal as _internal
 
 
 def uniform(low, high, shape=None, ctx=None, out=None):
@@ -38,11 +39,11 @@ def uniform(low, high, shape=None, ctx=None, out=None):
         if isinstance(shape, int):
             shape = (shape,)
         out = empty(shape, ctx)
-    return NDArray._sample_uniform(low=low, high=high, shape=out.shape, out=out)
+    return _internal._sample_uniform(low=low, high=high, shape=out.shape, out=out)
 
 
 def normal(loc, scale, shape=None, ctx=None, out=None):
-    """Generate normal(Gaussian) distribution N(mean, stdvar^2) with shape.
+    """Generate normal(Gaussian) distribution N(loc, scale^2) with shape.
 
     Parameters
     ----------
@@ -71,7 +72,7 @@ def normal(loc, scale, shape=None, ctx=None, out=None):
         if isinstance(shape, int):
             shape = (shape,)
         out = empty(shape, ctx)
-    return NDArray._sample_normal(loc=loc, scale=scale, shape=out.shape, out=out)
+    return _internal._sample_normal(loc=loc, scale=scale, shape=out.shape, out=out)
 
 
 def seed(seed_state):

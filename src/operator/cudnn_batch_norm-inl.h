@@ -98,6 +98,9 @@ class CuDNNBatchNormOp : public Operator {
       aux_states[cudnnbatchnorm::kMovingInvVar]
       .get_with_shape<gpu, 1, real_t>(Shape1(shape_[1]), s);
     float a = 1.0f, b = 0.0f;
+
+    if (param_.fix_gamma) gamma = 1.f;
+
     if (ctx.is_train) {
       Tensor<gpu, 1> save_mean =
         out_data[cudnnbatchnorm::kMean].get_with_shape<gpu, 1, real_t>(Shape1(shape_[1]), s);
@@ -172,6 +175,9 @@ class CuDNNBatchNormOp : public Operator {
     float b = 0.0f;
     float b_add = 1.0f;
     CHECK_EQ(s->dnn_handle_ownership_, mshadow::Stream<gpu>::OwnHandle);
+
+    if (param_.fix_gamma) gamma = 1.f;
+
 #if CUDNN_VERSION >= 4007
     CHECK_EQ(cudnnBatchNormalizationBackward(s->dnn_handle_,
                                              CUDNN_BATCHNORM_SPATIAL,
@@ -277,8 +283,7 @@ class CuDNNBatchNormProp : public OperatorProperty {
             out_data[cudnnbatchnorm::kMean],
             out_data[cudnnbatchnorm::kInvVar],
             in_data[cudnnbatchnorm::kData],
-            in_data[cudnnbatchnorm::kGamma],
-            in_data[cudnnbatchnorm::kBeta]
+            in_data[cudnnbatchnorm::kGamma]
            };
   }
 

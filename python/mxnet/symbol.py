@@ -12,14 +12,14 @@ import numpy
 from .base import _LIB
 from .base import c_array, c_str, mx_uint, py_str, string_types, mx_real_t
 from .base import NDArrayHandle, ExecutorHandle, SymbolHandle
-from .base import check_call, ctypes2docstring
+from .base import check_call, ctypes2docstring, MXNetError
 from .name import NameManager
 from .attribute import AttrScope
 from .context import Context
 from .ndarray import NDArray, zeros, _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP
 from .executor import Executor
 from .symbol_doc import SymbolDoc
-
+from . import _symbol_internal as _internal
 
 class Symbol(object):
     """Symbol is symbolic graph of the mxnet."""
@@ -35,11 +35,16 @@ class Symbol(object):
         """
         self.handle = handle
 
+    def __repr__(self):
+        """Get a string representation of the symbol."""
+        return '<%s %s>' % (self.__class__.__name__,
+                            self.name)
+
     def __add__(self, other):
         if isinstance(other, Symbol):
-            return Symbol._Plus(self, other)
+            return _internal._Plus(self, other)
         if isinstance(other, Number):
-            return Symbol._PlusScalar(self, scalar=other)
+            return _internal._PlusScalar(self, scalar=other)
         else:
             raise TypeError('type %s not supported' % str(type(other)))
 
@@ -48,23 +53,23 @@ class Symbol(object):
 
     def __sub__(self, other):
         if isinstance(other, Symbol):
-            return Symbol._Minus(self, other)
+            return _internal._Minus(self, other)
         if isinstance(other, Number):
-            return Symbol._MinusScalar(self, scalar=other)
+            return _internal._MinusScalar(self, scalar=other)
         else:
             raise TypeError('type %s not supported' % str(type(other)))
 
     def __rsub__(self, other):
         if isinstance(other, Number):
-            return Symbol._RMinusScalar(self, scalar=other)
+            return _internal._RMinusScalar(self, scalar=other)
         else:
             raise TypeError('type %s not supported' % str(type(other)))
 
     def __mul__(self, other):
         if isinstance(other, Symbol):
-            return Symbol._Mul(self, other)
+            return _internal._Mul(self, other)
         if isinstance(other, Number):
-            return Symbol._MulScalar(self, scalar=other)
+            return _internal._MulScalar(self, scalar=other)
         else:
             raise TypeError('type %s not supported' % str(type(other)))
 
@@ -73,15 +78,15 @@ class Symbol(object):
 
     def __div__(self, other):
         if isinstance(other, Symbol):
-            return Symbol._Div(self, other)
+            return _internal._Div(self, other)
         if isinstance(other, Number):
-            return Symbol._DivScalar(self, scalar=other)
+            return _internal._DivScalar(self, scalar=other)
         else:
             raise TypeError('type %s not supported' % str(type(other)))
 
     def __rdiv__(self, other):
         if isinstance(other, Number):
-            return Symbol._RDivScalar(self, scalar=other)
+            return _internal._RDivScalar(self, scalar=other)
         else:
             raise TypeError('type %s not supported' % str(type(other)))
 
@@ -93,9 +98,9 @@ class Symbol(object):
 
     def __pow__(self, other):
         if isinstance(other, Symbol):
-            return Symbol._Power(self, other)
+            return _internal._Power(self, other)
         if isinstance(other, Number):
-            return Symbol._PowerScalar(self, scalar=other)
+            return _internal._PowerScalar(self, scalar=other)
         else:
             raise TypeError('type %s not supported' % str(type(other)))
 
@@ -450,7 +455,15 @@ class Symbol(object):
             List of shapes of outputs.
             The order is in the same order as list_auxiliary()
         """
-        return self._infer_shape_impl(False, *args, **kwargs)
+        try:
+            return self._infer_shape_impl(False, *args, **kwargs)
+        except MXNetError:
+            print("infer_shape error. Arguments:")
+            for i, arg in enumerate(args):
+                print("  #%d: %s" % (i, arg))
+            for k, v in kwargs.items():
+                print("  %s: %s" % (k, v))
+            raise
 
     def infer_shape_partial(self, *args, **kwargs):
         """Partially infer the shape. The same as infer_shape, except that the partial
@@ -762,7 +775,7 @@ class Symbol(object):
 
         Returns
         -------
-        executor : mxnet.Executor
+        executor : Executor
             The generated Executor
 
         Notes
@@ -1091,11 +1104,12 @@ def _init_symbol_module():
     check_call(_LIB.MXSymbolListAtomicSymbolCreators(ctypes.byref(size),
                                                      ctypes.byref(plist)))
     module_obj = sys.modules[__name__]
+    module_internal = sys.modules["mxnet._symbol_internal"]
     for i in range(size.value):
         hdl = SymbolHandle(plist[i])
         function = _make_atomic_symbol_function(hdl)
         if function.__name__.startswith('_'):
-            setattr(Symbol, function.__name__, staticmethod(function))
+            setattr(module_internal, function.__name__, function)
         else:
             setattr(module_obj, function.__name__, function)
 
@@ -1118,11 +1132,11 @@ def pow(base, exp):
     result: Symbol or Number
     """
     if isinstance(base, Symbol) and isinstance(exp, Symbol):
-        return Symbol._Power(base, exp)
+        return _internal._Power(base, exp)
     if isinstance(base, Symbol) and isinstance(exp, Number):
-        return Symbol._PowerScalar(base, scalar=exp)
+        return _internal._PowerScalar(base, scalar=exp)
     if isinstance(base, Number) and isinstance(exp, Symbol):
-        return Symbol._RPowerScalar(exp, scalar=base)
+        return _internal._RPowerScalar(exp, scalar=base)
     if isinstance(base, Number) and isinstance(exp, Number):
         return base**exp
     else:
@@ -1144,11 +1158,11 @@ def maximum(left, right):
     result: Symbol or Number
     """
     if isinstance(left, Symbol) and isinstance(right, Symbol):
-        return Symbol._Maximum(left, right)
+        return _internal._Maximum(left, right)
     if isinstance(left, Symbol) and isinstance(right, Number):
-        return Symbol._MaximumScalar(left, scalar=right)
+        return _internal._MaximumScalar(left, scalar=right)
     if isinstance(left, Number) and isinstance(right, Symbol):
-        return Symbol._MaximumScalar(right, scalar=left)
+        return _internal._MaximumScalar(right, scalar=left)
     if isinstance(left, Number) and isinstance(right, Number):
         return left if left > right else right
     else:
@@ -1170,11 +1184,11 @@ def minimum(left, right):
     result: Symbol or Number
     """
     if isinstance(left, Symbol) and isinstance(right, Symbol):
-        return Symbol._Minimum(left, right)
+        return _internal._Minimum(left, right)
     if isinstance(left, Symbol) and isinstance(right, Number):
-        return Symbol._MinimumScalar(left, scalar=right)
+        return _internal._MinimumScalar(left, scalar=right)
     if isinstance(left, Number) and isinstance(right, Symbol):
-        return Symbol._MinimumScalar(right, scalar=left)
+        return _internal._MinimumScalar(right, scalar=left)
     if isinstance(left, Number) and isinstance(right, Number):
         return left if left > right else right
     else:
