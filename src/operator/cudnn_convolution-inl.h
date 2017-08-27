@@ -140,11 +140,28 @@ class CuDNNConvolutionOp : public Operator {
       wmat_ptr = wmat.dptr_;
       out_ptr = out.dptr_;
     }
-    for (uint32_t g = 0; g < param_.num_group; ++g) {
-      typename DataType<DType>::ScaleType alpha = 1.0f;
-      typename DataType<DType>::ScaleType beta = 0.0f;
-      typename DataType<DType>::ScaleType beta_add = 1.0f;
+    typename DataType<DType>::ScaleType alpha = 1.0f;
+    typename DataType<DType>::ScaleType beta = 0.0f;
+    typename DataType<DType>::ScaleType beta_add = 1.0f;
+
+    #if CUDNN_MAJOR >= 7
       CUDNN_CALL(cudnnConvolutionForward(s->dnn_handle_,
+                                       &alpha,
+                                       in_desc_,
+                                       data_ptr, 
+                                       filter_desc_,
+                                       wmat_ptr,
+                                       forward_conv_desc_,
+                                       forward_algo_.AlgoNumber(),
+                                       workspace.dptr_,
+                                       workspace_size,
+                                       req[conv::kOut] == kAddTo? &beta_add : &beta,
+                                       out_desc_,
+        			                         out_ptr)); 
+
+    #else
+      for (uint32_t g = 0; g < param_.num_group; ++g) {
+        CUDNN_CALL(cudnnConvolutionForward(s->dnn_handle_,
                                        &alpha,
                                        in_desc_,
                                        data_ptr + data_offset_ * g,
@@ -157,29 +174,31 @@ class CuDNNConvolutionOp : public Operator {
                                        req[conv::kOut] == kAddTo? &beta_add : &beta,
                                        out_desc_,
                                        out_ptr + out_offset_ * g));
-      if (!param_.no_bias) {
+      }
+    #endif  // CUDNN_MAJOR >= 7
+
+    if (!param_.no_bias) {
         Tensor<gpu, 1, DType> bias = in_data[conv::kBias].get<gpu, 1, DType>(s);
         #if CUDNN_MAJOR >= 4
         CUDNN_CALL(cudnnAddTensor(s->dnn_handle_,
                                 &alpha,
                                 bias_desc_,
-                                bias.dptr_ + bias_offset_ * g,
+                                bias.dptr_, 
                                 &beta_add,
                                 out_desc_,
-                                out_ptr + out_offset_ * g));
+                                out_ptr));
         #endif
         #if CUDNN_MAJOR == 3
         CUDNN_CALL(cudnnAddTensor(s->dnn_handle_,
-                                CUDNN_ADD_SAME_C,
-                                &alpha,
-                                bias_desc_,
-                                bias.dptr_ + bias_offset_ * g,
-                                &beta_add,
-                                out_desc_,
-                                out_ptr + out_offset_ * g));
+                               CUDNN_ADD_SAME_C,
+                               &alpha,
+                               bias_desc_,
+                               bias.dptr_,
+                               &beta_add,
+                               out_desc_,
+                               oust_ptr));
         #endif
       }
-    }
   }
 
   virtual void Backward(const OpContext &ctx,
@@ -225,7 +244,6 @@ class CuDNNConvolutionOp : public Operator {
     }
     Tensor<gpu, 1, DType> workspace = AllocateTempWorkspace(ctx, backward_workspace_byte_);
     size_t workspace_size = TensorSizeBytes(workspace);
-    for (uint32_t g = 0; g < param_.num_group; ++g) {
       typename DataType<DType>::ScaleType alpha = 1.0f;
       typename DataType<DType>::ScaleType beta = 0.0f;
       typename DataType<DType>::ScaleType beta_add = 1.0f;
@@ -234,11 +252,47 @@ class CuDNNConvolutionOp : public Operator {
         CUDNN_CALL(cudnnConvolutionBackwardBias(s->dnn_handle_,
                                               &alpha,
                                               out_desc_,
-                                              grad_ptr + out_offset_ * g,
+                                              grad_ptr, 
                                               req[conv::kBias] == kAddTo ? &beta_add : &beta,
                                               bias_desc_,
-                                              gbias.dptr_ + bias_offset_ * g));
+                                              gbias.dptr_));
       }
+
+    #if CUDNN_MAJOR >= 7
+      if (req[conv::kWeight] != kNullOp) {
+          CUDNN_CALL(cudnnConvolutionBackwardFilter(s->dnn_handle_,
+               &alpha,
+               in_desc_,
+               data_ptr,
+               out_desc_,
+               grad_ptr,
+               back_conv_desc_w_,
+               back_algo_w_.AlgoNumber(),
+               workspace.dptr_,
+               workspace_size,
+               req[conv::kWeight] == kAddTo? &beta_add : &beta,
+               filter_desc_,
+               gwmat_ptr));
+      }
+      
+      if (req[conv::kData] != kNullOp) {
+          CUDNN_CALL(cudnnConvolutionBackwardData(s->dnn_handle_,
+               &alpha,
+               filter_desc_,
+               wmat_ptr,
+               out_desc_,
+               grad_ptr,
+               back_conv_desc_,
+               back_algo_.AlgoNumber(),
+               workspace.dptr_,
+               workspace_size,
+               req[conv::kData] == kAddTo? &beta_add : &beta,
+               in_desc_,
+               gdata_ptr));
+      }
+
+    #else 
+    for (uint32_t g = 0; g < param_.num_group; ++g) {
       if (req[conv::kWeight] != kNullOp) {
         #if CUDNN_MAJOR <= 4
           CUDNN_CALL(cudnnConvolutionBackwardFilter_v3(s->dnn_handle_,
@@ -302,6 +356,7 @@ class CuDNNConvolutionOp : public Operator {
         #endif
       }
     }
+    #endif // CUDNN_MAJOR >= 7
   }
 
 /*!
@@ -372,7 +427,9 @@ class CuDNNConvolutionOp : public Operator {
     TShape wshape = in_shape[conv::kWeight];
     TShape oshape = out_shape[conv::kOut];
     TShape dstride, ostride;
+    #if CUDNN_MAJOR <= 6
     wshape[0] /= param_.num_group;
+    #endif
     if (param_.kernel.ndim() == 2) {
       // 2d conv
 
@@ -527,9 +584,15 @@ class CuDNNConvolutionOp : public Operator {
       CUDNN_CALL(cudnnSetConvolutionMathType(forward_conv_desc_, math_type));
       CUDNN_CALL(cudnnSetConvolutionMathType(back_conv_desc_, math_type));
       CUDNN_CALL(cudnnSetConvolutionMathType(back_conv_desc_w_, math_type));
+      CUDNN_CALL(cudnnSetConvolutionGroupCount(forward_conv_desc_, param_.num_group)) ;
+      CUDNN_CALL(cudnnSetConvolutionGroupCount(back_conv_desc_, param_.num_group)) ;
+      CUDNN_CALL(cudnnSetConvolutionGroupCount(back_conv_desc_w_, param_.num_group)) ;
     #endif
+    #if CUDNN_MAJOR <= 6
     dshape[1] /= param_.num_group;
     oshape[1] /= param_.num_group;
+    #endif
+
     weight_offset_ = wshape.Size();
     data_offset_ = dstride[1] * dshape[1];
     out_offset_ = ostride[1] * oshape[1];
@@ -557,10 +620,18 @@ class CuDNNConvolutionOp : public Operator {
 
     if (!param_.no_bias) {
       TShape bias = in_shape[conv::kBias];
+    #if CUDNN_MAJOR <= 6
       bias_offset_ = bias[0] / param_.num_group;
       std::vector<int> bias_shape = {1,
                                      static_cast<int>(bias[0] / param_.num_group),
                                      1, 1};
+   
+   #else  
+      bias_offset_ = bias[0]; 
+      std::vector<int> bias_shape = {1,
+                                     static_cast<int>(bias[0]),
+                                     1, 1};
+   #endif 
       std::vector<int> bias_stride = {static_cast<int>(bias_offset_), 1, 1, 1};
       if (param_.kernel.ndim() == 3) {
         bias_shape.push_back(1);
