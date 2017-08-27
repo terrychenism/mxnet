@@ -145,7 +145,11 @@ is.mx.ndarray <- function(src.array) {
 #' @param e1 The second operand
 #' @export
 Ops.MXNDArray <- function(e1, e2) {
-  mx.nd.internal.dispatch.Ops(.Generic, e1, e2)
+  if (missing(e2)) {
+    mx.nd.internal.dispatch.Ops(.Generic, 0, e1)
+  } else {
+    mx.nd.internal.dispatch.Ops(.Generic, e1, e2)
+  }
 }
 
 #' Dimension operator overload of mx.ndarray
@@ -176,7 +180,7 @@ as.matrix.MXNDArray <- function(nd) {
   if (length(dim(nd)) != 2) {
     stop("The input argument is not two dimensional matrix.")
   }
-  as.matrix(as.array(x))
+  as.matrix(as.array(nd))
 }
 
 #' print operator overload of mx.ndarray

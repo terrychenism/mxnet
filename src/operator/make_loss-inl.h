@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- * Copyright (c) 2015 by Contributors
  * \file make_loss-inl.h
  * \brief special layer for propagating loss
 */
@@ -32,19 +50,19 @@ struct MakeLossParam : public dmlc::Parameter<MakeLossParam> {
   float valid_thresh;
   DMLC_DECLARE_PARAMETER(MakeLossParam) {
     DMLC_DECLARE_FIELD(grad_scale).set_default(1.0f)
-    .describe("gradient scale as a supplement to unary and binary operators");
+    .describe("Gradient scale as a supplement to unary and binary operators");
     DMLC_DECLARE_FIELD(valid_thresh).set_default(0.0f)
-    .describe("regard element valid when x > valid_thresh, this is "
-    "used only in valid normalization mode.");
+    .describe("clip each element in the array to 0 when it is less than ``valid_thresh``."
+              " This is used when ``normalization`` is set to ``'valid'``.");
     DMLC_DECLARE_FIELD(normalization)
     .add_enum("null", make_loss_enum::kNull)
     .add_enum("batch", make_loss_enum::kBatch)
     .add_enum("valid", make_loss_enum::kValid)
     .set_default(make_loss_enum::kNull)
-    .describe("If set to null, op will not normalize on output gradient."
-              "If set to batch, op will normalize gradient by divide batch size."
-              "If set to valid, op will normalize gradient by divide # sample "
-              "marked as valid");
+    .describe("If this is set to null, the output gradient will not be normalized. "
+              "If this is set to batch, the output gradient will be divided by the batch size. "
+              "If this is set to valid, the output gradient will be divided by the number of "
+              "valid input elements.");
   }
 };
 
@@ -60,8 +78,8 @@ class MakeLossOp : public Operator {
                         const std::vector<TBlob> &aux_args) {
     using namespace mshadow;
     using namespace mshadow::expr;
-    CHECK_EQ(in_data.size(), 1) << "MakeLoss can only be used to one input";
-    CHECK_EQ(out_data.size(), 1);
+    CHECK_EQ(in_data.size(), 1U) << "MakeLoss can only be used to one input";
+    CHECK_EQ(out_data.size(), 1U);
     if (req[make_loss_enum::kOut] != kWriteInplace) {
       Stream<xpu> *s = ctx.get_stream<xpu>();
       Tensor<xpu, 2, DType> data = in_data[make_loss_enum::kData].FlatTo2D<xpu, DType>(s);
@@ -121,7 +139,7 @@ class MakeLossProp : public OperatorProperty {
                   std::vector<TShape> *out_shape,
                   std::vector<TShape> *aux_shape) const override {
     using namespace mshadow;
-    CHECK_EQ(in_shape->size(), 1);
+    CHECK_EQ(in_shape->size(), 1U);
     const TShape &dshape = in_shape->at(make_loss_enum::kData);
     if (dshape.ndim() == 0) return false;
     out_shape->clear();
@@ -132,7 +150,7 @@ class MakeLossProp : public OperatorProperty {
   bool InferType(std::vector<int> *in_type,
                  std::vector<int> *out_type,
                  std::vector<int> *aux_type) const override {
-    CHECK_EQ(in_type->size(), 1);
+    CHECK_EQ(in_type->size(), 1U);
     int dtype = (*in_type)[0];
     CHECK_NE(dtype, -1) << "Input must have specified type";
     out_type->clear();

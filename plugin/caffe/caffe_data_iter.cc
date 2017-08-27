@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- * Copyright (c) 2015 by Contributors
  * \file caffe_data_iter.cc
  * \brief register mnist iterator
 */
@@ -14,7 +32,6 @@
 #include "caffe_blob.h"
 #include "../../src/io/inst_vector.h"
 #include "../../src/io/iter_prefetcher.h"
-#include "../../src/operator/cast-inl.h"
 
 #define CHECK_NEXT_TIMING
 
@@ -192,18 +209,19 @@ class CaffeDataIterWrapper : public PrefetcherIter {
   virtual void Init(const std::vector<std::pair<std::string, std::string> >& kwargs) {
     // We need to init prefetcher args in order to get dtype
     this->param_.InitAllowUnknown(kwargs);
-    switch (this->param_.dtype) {
+    if (!this->param_.dtype) this->param_.dtype = mshadow::kFloat32;
+    switch (this->param_.dtype.value()) {
       case mshadow::kFloat32:
-        this->loader_.reset(new CaffeDataIter<float>(this->param_.dtype));
+        this->loader_.reset(new CaffeDataIter<float>(this->param_.dtype.value()));
         break;
       case mshadow::kFloat64:
-        this->loader_.reset(new CaffeDataIter<double>(this->param_.dtype));
+        this->loader_.reset(new CaffeDataIter<double>(this->param_.dtype.value()));
         break;
       case mshadow::kFloat16:
         LOG(FATAL) << "float16 layer is not supported by caffe";
         return;
       default:
-        LOG(FATAL) << "Unsupported type " << this->param_.dtype;
+        LOG(FATAL) << "Unsupported type " << this->param_.dtype.value();
         return;
     }
     PrefetcherIter::Init(kwargs);

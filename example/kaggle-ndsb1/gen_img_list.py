@@ -1,3 +1,21 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+from __future__ import print_function
 import csv
 import os
 import sys
@@ -25,7 +43,7 @@ random.seed(888)
 
 fo_name=os.path.join(args.out_folder+args.out_file)
 fo = csv.writer(open(fo_name, "w"), delimiter='\t', lineterminator='\n')
-    
+
 if args.train:
     tr_fo_name=os.path.join(args.out_folder+"tr.lst")
     va_fo_name=os.path.join(args.out_folder+"va.lst")
@@ -57,7 +75,7 @@ random.shuffle(img_lst)
 #write
 for item in img_lst:
     fo.writerow(item)
-        
+
 
 
 ## If training, split into train and validation lists (tr.lst and va.lst)
@@ -72,13 +90,13 @@ if args.train:
         # unique_train, counts_train = np.unique(labels_train, return_counts=True) # To have a look at the frecuency distribution
         sss = StratifiedShuffleSplit(labels_train, 1, test_size=args.percent_val, random_state=0)
         for tr_idx, va_idx in sss:
-            print "Train subset has ", len(tr_idx), " cases. Validation subset has ", len(va_idx), "cases"
+            print("Train subset has ", len(tr_idx), " cases. Validation subset has ", len(va_idx), "cases")
     else:
         (nRows, nCols) = img_lst.shape
         splitat=int(round(nRows*(1-args.percent_val),0))
         tr_idx=range(0,splitat)
         va_idx=range(splitat,nRows)
-        print "Train subset has ", len(tr_idx), " cases. Validation subset has ", len(va_idx), "cases" 
+        print("Train subset has ", len(tr_idx), " cases. Validation subset has ", len(va_idx), "cases")
 
     tr_lst=img_lst[tr_idx,:].tolist()
     va_lst=img_lst[va_idx,:].tolist()

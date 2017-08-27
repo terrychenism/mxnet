@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- * Copyright (c) 2015 by Contributors
  * \file upsampling-inl.h
  * \brief
  * \author Bing Xu
@@ -76,8 +94,8 @@ class UpSamplingNearestOp : public Operator {
                        const std::vector<TBlob> &aux_args) {
     using namespace mshadow;
     using namespace mshadow::expr;
-    CHECK_EQ(in_data.size(), param_.num_args);
-    CHECK_EQ(out_data.size(), 1);
+    CHECK_EQ(in_data.size(), static_cast<size_t>(param_.num_args));
+    CHECK_EQ(out_data.size(), 1U);
     if (req[up_enum::kOut] == kNullOp) {
       return;
     }
@@ -115,8 +133,8 @@ class UpSamplingNearestOp : public Operator {
                         const std::vector<TBlob> &aux_args) {
     using namespace mshadow;
     using namespace mshadow::expr;
-    CHECK_EQ(out_grad.size(), 1);
-    CHECK_EQ(in_grad.size(), param_.num_args);
+    CHECK_EQ(out_grad.size(), 1U);
+    CHECK_EQ(in_grad.size(), static_cast<size_t>(param_.num_args));
     Stream<xpu> *s = ctx.get_stream<xpu>();
     Tensor<xpu, 4, DType> grad = out_grad[up_enum::kOut].get<xpu, 4, DType>(s);
     if (param_.num_args > 1) {
@@ -181,7 +199,7 @@ class UpSamplingProp : public OperatorProperty {
     if (param_.sample_type == up_enum::kNearest) {
       std::vector<std::string> ret;
       for (int i = 0; i < param_.num_args; ++i) {
-        ret.push_back(std::string("arg") + static_cast<char>('0' + i));
+        ret.push_back(std::string("arg") + std::to_string(i));
       }
       return ret;
     } else {
@@ -192,19 +210,19 @@ class UpSamplingProp : public OperatorProperty {
   bool InferShape(std::vector<TShape> *in_shape,
                   std::vector<TShape> *out_shape,
                   std::vector<TShape> *aux_shape) const override {
-    CHECK_GE(in_shape->size(), 1);
+    CHECK_GE(in_shape->size(), 1U);
     const TShape &dshape = (*in_shape)[0];
     TShape oshape = dshape;
     if (param_.sample_type == up_enum::kNearest) {
       CHECK_EQ(in_shape->size(), static_cast<size_t>(param_.num_args));
       oshape[1] = 0;
       for (auto& shape : *in_shape) {
-        CHECK_EQ(shape.ndim(), 4) << \
+        CHECK_EQ(shape.ndim(), 4U) << \
           "UpSamplingNearest: Input data should be 4D in (batch, channel, y, x)";
         int oh = dshape[2]*param_.scale, ow = dshape[3]*param_.scale;
-        CHECK_EQ(oh%shape[2], 0) << "UpSamplingNearest: input height of " << shape[2] << \
+        CHECK_EQ(oh%shape[2], 0U) << "UpSamplingNearest: input height of " << shape[2] << \
           "does not divide output height of " << oh;
-        CHECK_EQ(ow%shape[3], 0) << "UpSamplingNearest: input weight of " << shape[3] << \
+        CHECK_EQ(ow%shape[3], 0U) << "UpSamplingNearest: input width of " << shape[3] << \
           "does not divide output width of " << ow;
         if (param_.multi_input_mode == up_enum::kSum) {
           CHECK(oshape[1] == 0 || oshape[1] == shape[1]) << \
@@ -215,8 +233,8 @@ class UpSamplingProp : public OperatorProperty {
         }
       }
     } else {
-      CHECK_EQ(in_shape->size(), 2) << "Input:[data, weight]";
-      CHECK_EQ(dshape.ndim(), 4) << \
+      CHECK_EQ(in_shape->size(), 2U) << "Input:[data, weight]";
+      CHECK_EQ(dshape.ndim(), 4U) << \
         "UpSamplingBilinear: Input data should be 4D in (batch, channel, y, x)";
       if (dshape.ndim() ==  0) return false;
       int kernel = 2 * param_.scale - param_.scale % 2;
@@ -235,7 +253,7 @@ class UpSamplingProp : public OperatorProperty {
   bool InferType(std::vector<int> *in_type,
                  std::vector<int> *out_type,
                  std::vector<int> *aux_type) const override {
-    CHECK_GE(in_type->size(), 1);
+    CHECK_GE(in_type->size(), 1U);
     int dtype = (*in_type)[0];
     CHECK_NE(dtype, -1) << "First input must have specified type";
     for (index_t i = 0; i < in_type->size(); ++i) {
@@ -316,4 +334,3 @@ class UpSamplingProp : public OperatorProperty {
 }  // namespace mxnet
 
 #endif  // MXNET_OPERATOR_UPSAMPLING_INL_H_
-

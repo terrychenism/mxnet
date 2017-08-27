@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- * Copyright (c) 2015 by Contributors
  * \file rnn-inl.h
  * \brief
  * \author Sebastian Bodenstein
@@ -178,13 +196,13 @@ class RNNProp : public OperatorProperty {
                   std::vector<TShape> *aux_shape) const override {
     using namespace mshadow;
     if (param_.mode == rnn_enum::kLstm) {
-      CHECK_EQ(in_shape->size(), 4) << "Input:[data, parameters, state, cell_state]";
+      CHECK_EQ(in_shape->size(), 4U) << "Input:[data, parameters, state, cell_state]";
     } else {
-      CHECK_EQ(in_shape->size(), 3) << "Input:[data, parameters, state]";
+      CHECK_EQ(in_shape->size(), 3U) << "Input:[data, parameters, state]";
     }
     const TShape &dshape = (*in_shape)[rnn_enum::kData];
     if (dshape.ndim() ==  0) return false;
-    CHECK_EQ(dshape.ndim(), 3) \
+    CHECK_EQ(dshape.ndim(), 3U) \
         << "Input data should be rank-3 tensor of dim [sequence length, batch size, input size]";
     // data: [sequence len, batch, input dimension]
     int batch_size = dshape[1];
@@ -231,7 +249,7 @@ class RNNProp : public OperatorProperty {
   bool InferType(std::vector<int> *in_type,
                  std::vector<int> *out_type,
                  std::vector<int> *aux_type) const override {
-    CHECK_GE(in_type->size(), 1);
+    CHECK_GE(in_type->size(), 1U);
     int dtype = (*in_type)[0];
     CHECK_NE(dtype, -1) << "First input must have specified type";
     for (index_t i = 0; i < in_type->size(); ++i) {

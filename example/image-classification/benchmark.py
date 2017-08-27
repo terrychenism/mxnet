@@ -1,4 +1,21 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
 
+from __future__ import print_function
 import logging
 import argparse
 import os
@@ -13,7 +30,6 @@ import importlib
 import collections
 import threading
 import copy
-from past.builtins import xrange
 '''
 Setup Logger and LogLevel
 '''
@@ -87,7 +103,7 @@ def parse_args():
                 sys.exit(1)
             try:
                 #check if the network exists
-                importlib.import_module('symbol.'+ args[0])
+                importlib.import_module('symbols.'+ args[0])
                 batch_size = int(args[1])
                 img_size = int(args[2])
                 return Network(name=args[0], batch_size=batch_size, img_size=img_size)
@@ -150,7 +166,7 @@ def stop_old_processes(hosts_file):
     time.sleep(1)
 
 def run_imagenet(kv_store, data_shape, batch_size, num_gpus, num_nodes, network, args_workers_file):
-    imagenet_args=['python',  'train_imagenet.py',  '--gpus', ','.join(str(i) for i in xrange(num_gpus)), \
+    imagenet_args=['python',  'train_imagenet.py',  '--gpus', ','.join(str(i) for i in range(num_gpus)), \
                    '--network', network, '--batch-size', str(batch_size * num_gpus), \
                    '--image-shape', '3,' + str(data_shape) + ',' + str(data_shape), '--num-epochs', '1' ,'--kv-store', kv_store, '--benchmark', '1', '--disp-batches', '10']
     log = log_loc + '/' + network + '_' + str(num_nodes*num_gpus) + '_log'

@@ -51,6 +51,7 @@ tracker
 .vimrc
 .ycm_extra_conf.py
 .ycm_extra_conf.pyc
+.clang-format
 
 # Emacs
 .#*
@@ -62,9 +63,9 @@ __pycache__
 *.json
 *.d
 build
+cmake-build*
 data
 recommonmark
-bin
 deps
 
 # R
@@ -76,6 +77,7 @@ R-package/inst/*
 *.tar.gz
 *.tgz
 R-package/man/*.Rd
+R-package/R/mxnet_generated.R
 
 # data
 *.rec
@@ -84,6 +86,7 @@ R-package/man/*.Rd
 *ubyte
 *.bin
 *.txt
+!CMakeLists.txt
 
 # ipython notebook
 *_pb2.py
@@ -117,9 +120,6 @@ scala-package/*/*/target/
 .pydevproject
 CMakeFiles
 cmake_install.cmake
-dmlc-core
-ps-lite
-nnvm
 lib
 
 # Visual Studio Code
@@ -127,3 +127,24 @@ lib
 
 # Mac OS X
 .DS_Store
+
+#Notebook Automated Test
+!tests/nightly/test_tutorial_config.txt
+!tests/nightly/TestNotebook
+
+# pip building tools
+tools/pip_package/build
+tools/pip_package/dist
+tools/pip_package/mxnet.egg-info
+tools/pip_package/mxnet
+
+# temporary path for building dependencies when building wheel
+./deps/
+bld
+./tmp/*
+*.jar
+target
+
+bin/im2rec
+
+model/

@@ -1,5 +1,23 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 # pylint: disable=C0111,too-many-arguments,too-many-instance-attributes,too-many-locals,redefined-outer-name,fixme
 # pylint: disable=superfluous-parens, no-member, invalid-name
+from __future__ import print_function
 import sys, random
 sys.path.insert(0, "../../python")
 import numpy as np
@@ -47,7 +65,8 @@ def get_label(buf):
 class OCRIter(mx.io.DataIter):
     def __init__(self, count, batch_size, num_label, init_states):
         super(OCRIter, self).__init__()
-        self.captcha = ImageCaptcha(fonts=['./data/Xerox.ttf'])
+        # you can get this font from http://font.ubuntu.com/
+        self.captcha = ImageCaptcha(fonts=['./font/Ubuntu-M.ttf'])
         self.batch_size = batch_size
         self.count = count
         self.num_label = num_label
@@ -57,7 +76,7 @@ class OCRIter(mx.io.DataIter):
         self.provide_label = [('label', (self.batch_size, 4))]
 
     def __iter__(self):
-        print 'iter'
+        print('iter')
         init_state_names = [x[0] for x in self.init_states]
         for k in range(self.count):
             data = []
@@ -78,8 +97,8 @@ class OCRIter(mx.io.DataIter):
             label_all = [mx.nd.array(label)]
             data_names = ['data'] + init_state_names
             label_names = ['label']
-            
-            
+
+
             data_batch = SimpleBatch(data_names, data_all, label_names, label_all)
             yield data_batch
 
@@ -130,6 +149,36 @@ def Accuracy(label, pred):
         total += 1.0
     return hit / total
 
+def LCS(p,l):
+    # Dynamic Programming Finding LCS
+    if len(p) == 0:
+        return 0
+    P = np.array(list(p)).reshape((1, len(p)))
+    L = np.array(list(l)).reshape((len(l), 1))
+    M = np.int32(P == L)
+    for i in range(M.shape[0]):
+        for j in range(M.shape[1]):
+            up = 0 if i == 0 else M[i-1,j]
+            left = 0 if j == 0 else M[i,j-1]
+            M[i,j] = max(up, left, M[i,j] if (i == 0 or j == 0) else M[i,j] + M[i-1,j-1])
+    return M.max()
+
+
+def Accuracy_LCS(label, pred):
+    global BATCH_SIZE
+    global SEQ_LENGTH
+    hit = 0.
+    total = 0.
+    for i in range(BATCH_SIZE):
+        l = remove_blank(label[i])
+        p = []
+        for k in range(SEQ_LENGTH):
+            p.append(np.argmax(pred[k * BATCH_SIZE + i]))
+        p = ctc_label(p)
+        hit += LCS(p,l) * 1.0 / len(l)
+        total += 1.0
+    return hit / total
+
 if __name__ == '__main__':
     num_hidden = 100
     num_lstm_layer = 2
@@ -139,7 +188,7 @@ if __name__ == '__main__':
     momentum = 0.9
     num_label = 4
 
-    contexts = [mx.context.gpu(1)]
+    contexts = [mx.context.gpu(0)]
 
     def sym_gen(seq_len):
         return lstm_unroll(num_lstm_layer, seq_len,
@@ -166,11 +215,15 @@ if __name__ == '__main__':
     import logging
     head = '%(asctime)-15s %(message)s'
     logging.basicConfig(level=logging.DEBUG, format=head)
-    
-    print 'begin fit'
 
+    print('begin fit')
+
+    prefix = 'ocr'
     model.fit(X=data_train, eval_data=data_val,
               eval_metric = mx.metric.np(Accuracy),
-              batch_end_callback=mx.callback.Speedometer(BATCH_SIZE, 50),)
+              # Use the following eval_metric if your num_label >= 10, or varies in a wide range
+              # eval_metric = mx.metric.np(Accuracy_LCS),
+              batch_end_callback=mx.callback.Speedometer(BATCH_SIZE, 50),
+              epoch_end_callback = mx.callback.do_checkpoint(prefix, 1))
 
-    model.save("ocr")
+    model.save(prefix)

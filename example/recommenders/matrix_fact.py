@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import math
 import mxnet as mx
 import numpy as np
@@ -16,7 +33,7 @@ def RMSE(label, pred):
     return math.sqrt(ret / n)
 
 
-def train(network, data_pair, num_epoch, learning_rate, optimizer='sgd', opt_args=None):
+def train(network, data_pair, num_epoch, learning_rate, optimizer='sgd', opt_args=None, ctx=[mx.gpu(0)]):
     np.random.seed(123)  # Fix random seed for consistent demos
     mx.random.seed(123)  # Fix random seed for consistent demos
     if not opt_args:
@@ -25,7 +42,7 @@ def train(network, data_pair, num_epoch, learning_rate, optimizer='sgd', opt_arg
         opt_args['momentum'] = 0.9
 
     model = mx.model.FeedForward(
-        ctx = [mx.gpu(0)],  # can be change to [mx.gpu(0), mx.gpu(1)] if there are 2 gpus
+        ctx = ctx,
         symbol = network,
         num_epoch = num_epoch,
         optimizer = optimizer,
@@ -37,7 +54,7 @@ def train(network, data_pair, num_epoch, learning_rate, optimizer='sgd', opt_arg
     train, test = (data_pair)
 
     lc = mxnet.notebook.callback.LiveLearningCurve('RMSE', 1)
-    model.fit(X = train, 
+    model.fit(X = train,
               eval_data = test,
               eval_metric = RMSE,
               **mxnet.notebook.callback.args_wrapper(lc)

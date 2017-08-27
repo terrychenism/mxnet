@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- *  Copyright (c) 2015 by Contributors
  * \file c_predict_api.h
  * \brief C predict API of mxnet, contains a minimum API to run prediction.
  *  This file is self-contained, and do not dependent on any other files.
@@ -7,20 +25,19 @@
 #ifndef MXNET_C_PREDICT_API_H_
 #define MXNET_C_PREDICT_API_H_
 
+/*! \brief Inhibit C++ name-mangling for MXNet functions. */
 #ifdef __cplusplus
-#define MXNET_EXTERN_C extern "C"
-#else
-#define MXNET_EXTERN_C
-#endif
+extern "C" {
+#endif  // __cplusplus
 
 #ifdef _WIN32
 #ifdef MXNET_EXPORTS
-#define MXNET_DLL MXNET_EXTERN_C __declspec(dllexport)
+#define MXNET_DLL __declspec(dllexport)
 #else
-#define MXNET_DLL MXNET_EXTERN_C __declspec(dllimport)
+#define MXNET_DLL __declspec(dllimport)
 #endif
 #else
-#define MXNET_DLL MXNET_EXTERN_C
+#define MXNET_DLL
 #endif
 
 /*! \brief manually define unsigned int */
@@ -198,10 +215,14 @@ MXNET_DLL int MXNDListGet(NDListHandle handle,
                           const mx_uint** out_shape,
                           mx_uint* out_ndim);
 /*!
- * \brief Free a predictor handle.
- * \param handle The handle of the predictor.
+ * \brief Free a MXAPINDList
+ * \param handle The handle of the MXAPINDList.
  * \return 0 when success, -1 when failure.
  */
 MXNET_DLL int MXNDListFree(NDListHandle handle);
+
+#ifdef __cplusplus
+}
+#endif  // __cplusplus
 
 #endif  // MXNET_C_PREDICT_API_H_

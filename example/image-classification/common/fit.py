@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import mxnet as mx
 import logging
 import os
@@ -76,12 +93,16 @@ def add_fit_args(parser):
                        help='show progress for every n batches')
     train.add_argument('--model-prefix', type=str,
                        help='model prefix')
+    parser.add_argument('--monitor', dest='monitor', type=int, default=0,
+                        help='log network parameters every N iters if larger than 0')
     train.add_argument('--load-epoch', type=int,
                        help='load the model on an epoch using the model-load-prefix')
     train.add_argument('--top-k', type=int, default=0,
                        help='report the top-k accuracy. 0 means no report.')
     train.add_argument('--test-io', type=int, default=0,
                        help='1 means test reading speed without training')
+    train.add_argument('--dtype', type=str, default='float32',
+                       help='precision: float32 or float16')
     return train
 
 def fit(args, network, data_loader, **kwargs):
@@ -134,22 +155,35 @@ def fit(args, network, data_loader, **kwargs):
     lr, lr_scheduler = _get_lr_scheduler(args, kv)
 
     # create model
-    model = mx.model.FeedForward(
-        ctx           = devs,
-        symbol        = network,
-        begin_epoch   = args.load_epoch if args.load_epoch else 0,
-        num_epoch     = args.num_epochs,
-        arg_params    = arg_params,
-        aux_params    = aux_params,
-        learning_rate = lr,
-        lr_scheduler  = lr_scheduler,
-        momentum      = args.mom,
-        wd            = args.wd,
-        optimizer     = args.optimizer,
-        initializer   = mx.init.Xavier(
-            rnd_type='gaussian', factor_type="in", magnitude=2)
-        # initializer   = mx.init.Xavier(factor_type="in", magnitude=2.34),
+    model = mx.mod.Module(
+        context       = devs,
+        symbol        = network
     )
+
+    lr_scheduler  = lr_scheduler
+    optimizer_params = {
+            'learning_rate': lr,
+            'wd' : args.wd,
+            'lr_scheduler': lr_scheduler}
+
+    # Add 'multi_precision' parameter only for SGD optimizer
+    if args.optimizer == 'sgd':
+        optimizer_params['multi_precision'] = True
+
+    # Only a limited number of optimizers have 'momentum' property
+    has_momentum = {'sgd', 'dcasgd', 'nag'}
+    if args.optimizer in has_momentum:
+        optimizer_params['momentum'] = args.mom
+
+    monitor = mx.mon.Monitor(args.monitor, pattern=".*") if args.monitor > 0 else None
+
+    if args.network == 'alexnet':
+        # AlexNet will not converge using Xavier
+        initializer = mx.init.Normal()
+    else:
+        initializer = mx.init.Xavier(
+            rnd_type='gaussian', factor_type="in", magnitude=2)
+    # initializer   = mx.init.Xavier(factor_type="in", magnitude=2.34),
 
     # evaluation metrices
     eval_metrics = ['accuracy']
@@ -163,10 +197,18 @@ def fit(args, network, data_loader, **kwargs):
         batch_end_callbacks += cbs if isinstance(cbs, list) else [cbs]
 
     # run
-    model.fit(
-        X                  = train,
+    model.fit(train,
+        begin_epoch        = args.load_epoch if args.load_epoch else 0,
+        num_epoch          = args.num_epochs,
         eval_data          = val,
         eval_metric        = eval_metrics,
         kvstore            = kv,
+        optimizer          = args.optimizer,
+        optimizer_params   = optimizer_params,
+        initializer        = initializer,
+        arg_params         = arg_params,
+        aux_params         = aux_params,
         batch_end_callback = batch_end_callbacks,
-        epoch_end_callback = checkpoint)
+        epoch_end_callback = checkpoint,
+        allow_missing      = True,
+        monitor            = monitor)

@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- * Copyright (c) 2015 by Contributors
  * \file roi_pooling-inl.h
  * \brief roi pooling operator and symbol
  * \author Kye-Hyeon Kim, Jian Guo
@@ -34,7 +52,7 @@ struct ROIPoolingParam : public dmlc::Parameter<ROIPoolingParam> {
   DMLC_DECLARE_PARAMETER(ROIPoolingParam) {
     DMLC_DECLARE_FIELD(pooled_size)
     .set_expect_ndim(2).enforce_nonzero()
-    .describe("fix pooled size: (h, w)");
+    .describe("ROI pooling output shape (h,w) ");
     DMLC_DECLARE_FIELD(spatial_scale).set_range(0.0, 1.0)
     .describe("Ratio of input feature map height (or w) to raw image height (or w). "
     "Equals the reciprocal of total stride in convolutional layers");
@@ -152,16 +170,16 @@ class ROIPoolingProp : public OperatorProperty {
                   std::vector<TShape> *out_shape,
                   std::vector<TShape> *aux_shape) const override {
     using namespace mshadow;
-    CHECK_EQ(in_shape->size(), 2) << "Input:[data, rois]";
+    CHECK_EQ(in_shape->size(), 2U) << "Input:[data, rois]";
 
     // data: [batch_size, c, h, w]
     TShape dshape = in_shape->at(roipool::kData);
-    CHECK_EQ(dshape.ndim(), 4) << "data should be a 4D tensor";
+    CHECK_EQ(dshape.ndim(), 4U) << "data should be a 4D tensor";
 
     // bbox: [num_rois, 5]
     TShape bshape = in_shape->at(roipool::kBox);
-    CHECK_EQ(bshape.ndim(), 2) << "bbox should be a 2D tensor of shape [batch, 5]";
-    CHECK_EQ(bshape[1], 5) << "bbox should be a 2D tensor of shape [batch, 5]";
+    CHECK_EQ(bshape.ndim(), 2U) << "bbox should be a 2D tensor of shape [batch, 5]";
+    CHECK_EQ(bshape[1], 5U) << "bbox should be a 2D tensor of shape [batch, 5]";
 
     // out: [num_rois, c, pooled_h, pooled_w]
     // max_idx: [num_rois, c, pooled_h, pooled_w]
@@ -176,7 +194,7 @@ class ROIPoolingProp : public OperatorProperty {
   bool InferType(std::vector<int> *in_type,
                  std::vector<int> *out_type,
                  std::vector<int> *aux_type) const override {
-    CHECK_EQ(in_type->size(), 2);
+    CHECK_EQ(in_type->size(), 2U);
     int dtype = (*in_type)[0];
     CHECK_EQ(dtype, (*in_type)[1]);
     CHECK_NE(dtype, -1) << "Input must have specified type";

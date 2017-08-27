@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- *  Copyright (c) 2015 by Contributors
  * \file resource.cc
  * \brief Implementation of resource manager.
  */
@@ -53,7 +71,7 @@ struct SpaceAllocator {
 
   inline void* GetHostSpace(size_t size) {
     if (host_handle.size >= size) return host_handle.dptr;
-    if (handle.size != 0) {
+    if (host_handle.size != 0) {
       Storage::Get()->DirectFree(host_handle);
     }
     host_handle = Storage::Get()->Alloc(size, Context());
@@ -171,7 +189,8 @@ class ResourceManagerImpl : public ResourceManager {
       Engine::Get()->PushSync([r, seed](RunContext rctx) {
           r->set_stream(rctx.get_stream<xpu>());
           r->Seed(seed);
-        }, ctx, {}, {resource.var});
+        }, ctx, {}, {resource.var},
+        FnProperty::kNormal, 0, PROFILER_MESSAGE("ResourceRandomSetSeed"));
     }
   };
 
@@ -194,7 +213,7 @@ class ResourceManagerImpl : public ResourceManager {
         resource[i].ptr_ = &space[i];
         resource[i].req = ResourceRequest(ResourceRequest::kTempSpace);
         space[i].ctx = ctx;
-        CHECK_EQ(space[i].handle.size, 0);
+        CHECK_EQ(space[i].handle.size, 0U);
       }
     }
     ~ResourceTempSpace() {

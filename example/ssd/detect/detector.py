@@ -1,3 +1,21 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+from __future__ import print_function
 import mxnet as mx
 import numpy as np
 from timeit import default_timer as timer
@@ -30,8 +48,10 @@ class Detector(object):
         self.ctx = ctx
         if self.ctx is None:
             self.ctx = mx.cpu()
-        _, args, auxs = mx.model.load_checkpoint(model_prefix, epoch)
-        self.mod = mx.mod.Module(symbol, context=ctx)
+        load_symbol, args, auxs = mx.model.load_checkpoint(model_prefix, epoch)
+        if symbol is None:
+            symbol = load_symbol
+        self.mod = mx.mod.Module(symbol, label_names=None, context=ctx)
         self.data_shape = data_shape
         self.mod.bind(data_shapes=[('data', (batch_size, 3, data_shape, data_shape))])
         self.mod.set_params(args, auxs)
@@ -60,8 +80,8 @@ class Detector(object):
         detections = self.mod.predict(det_iter).asnumpy()
         time_elapsed = timer() - start
         if show_timer:
-            print "Detection time for {} images: {:.4f} sec".format(
-                num_images, time_elapsed)
+            print("Detection time for {} images: {:.4f} sec".format(
+                num_images, time_elapsed))
         result = []
         for i in range(detections.shape[0]):
             det = detections[i, :, :]

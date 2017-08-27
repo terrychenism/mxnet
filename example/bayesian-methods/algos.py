@@ -1,3 +1,21 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+from __future__ import print_function
 import mxnet as mx
 import mxnet.ndarray as nd
 import time
@@ -91,7 +109,7 @@ def HMC(sym, data_inputs, X, Y, X_test, Y_test, sample_num,
     sample_pool = []
     accept_num = 0
     start = time.time()
-    for i in xrange(sample_num):
+    for i in range(sample_num):
         sample_params, is_accept = step_HMC(exe, exe_params, exe_grads, label_key, noise_precision,
                                             prior_precision, L, learning_rate)
         accept_num += is_accept
@@ -100,13 +118,13 @@ def HMC(sym, data_inputs, X, Y, X_test, Y_test, sample_num,
             sample_pool.append(sample_params)
             if (i + 1) % 100000 == 0:
                 end = time.time()
-                print "Current Iter Num: %d" % (i + 1), "Time Spent: %f" % (end - start), "MSE:",
-                print sample_test_regression(exe, X=X_test, Y=Y_test, sample_pool=sample_pool,
+                print("Current Iter Num: %d" % (i + 1), "Time Spent: %f" % (end - start), "MSE:",
+                      sample_test_regression(exe, X=X_test, Y=Y_test, sample_pool=sample_pool,
                                              minibatch_size=Y.shape[0],
-                                             save_path='regression_HMC.txt')
+                                             save_path='regression_HMC.txt'))
                 start = time.time()
         exe.copy_params_from(sample_params)
-    print 'accept ratio', accept_num / float(sample_num)
+    print('accept ratio', accept_num / float(sample_num))
     return sample_pool
 
 
@@ -126,7 +144,7 @@ def SGD(sym, data_inputs, X, Y, X_test, Y_test, total_iter_num,
                                     arg_names=params.keys())
     updater = mx.optimizer.get_updater(optimizer)
     start = time.time()
-    for i in xrange(total_iter_num):
+    for i in range(total_iter_num):
         indices = numpy.random.randint(X.shape[0], size=minibatch_size)
         X_batch = X[indices]
         Y_batch = Y[indices]
@@ -142,7 +160,7 @@ def SGD(sym, data_inputs, X, Y, X_test, Y_test, total_iter_num,
             updater(k, params_grad[k], params[k])
         if (i + 1) % 500 == 0:
             end = time.time()
-            print "Current Iter Num: %d" % (i + 1), "Time Spent: %f" % (end - start)
+            print("Current Iter Num: %d" % (i + 1), "Time Spent: %f" % (end - start))
             sample_test_acc(exe, X=X_test, Y=Y_test, label_num=10, minibatch_size=100)
             start = time.time()
     return exe, params, params_grad
@@ -166,7 +184,7 @@ def SGLD(sym, X, Y, X_test, Y_test, total_iter_num,
     updater = mx.optimizer.get_updater(optimizer)
     sample_pool = []
     start = time.time()
-    for i in xrange(total_iter_num):
+    for i in range(total_iter_num):
         indices = numpy.random.randint(X.shape[0], size=minibatch_size)
         X_batch = X[indices]
         Y_batch = Y[indices]
@@ -192,17 +210,17 @@ def SGLD(sym, X, Y, X_test, Y_test, total_iter_num,
         if (i + 1) % 100000 == 0:
             end = time.time()
             if task == 'classification':
-                print "Current Iter Num: %d" % (i + 1), "Time Spent: %f" % (end - start)
+                print("Current Iter Num: %d" % (i + 1), "Time Spent: %f" % (end - start))
                 test_correct, test_total, test_acc = \
                     sample_test_acc(exe, sample_pool=sample_pool, X=X_test, Y=Y_test, label_num=10,
                                     minibatch_size=minibatch_size)
-                print "Test %d/%d=%f" % (test_correct, test_total, test_acc)
+                print("Test %d/%d=%f" % (test_correct, test_total, test_acc))
             else:
-                print "Current Iter Num: %d" % (i + 1), "Time Spent: %f" % (end - start), "MSE:",
-                print sample_test_regression(exe=exe, sample_pool=sample_pool,
+                print("Current Iter Num: %d" % (i + 1), "Time Spent: %f" % (end - start), "MSE:",
+                      sample_test_regression(exe=exe, sample_pool=sample_pool,
                                              X=X_test,
                                              Y=Y_test, minibatch_size=minibatch_size,
-                                             save_path='regression_SGLD.txt')
+                                             save_path='regression_SGLD.txt'))
             start = time.time()
     return exe, sample_pool
 
@@ -242,7 +260,7 @@ def DistilledSGLD(teacher_sym, student_sym,
     teacher_updater = mx.optimizer.get_updater(teacher_optimizer)
     student_updater = mx.optimizer.get_updater(student_optimizer)
     start = time.time()
-    for i in xrange(total_iter_num):
+    for i in range(total_iter_num):
         # 1.1 Draw random minibatch
         indices = numpy.random.randint(X.shape[0], size=minibatch_size)
         X_batch = X[indices]
@@ -292,7 +310,7 @@ def DistilledSGLD(teacher_sym, student_sym,
         if (i + 1) % 2000 == 0:
             end = time.time()
             if task == 'classification':
-                print "Current Iter Num: %d" % (i + 1), "Time Spent: %f" % (end - start)
+                print("Current Iter Num: %d" % (i + 1), "Time Spent: %f" % (end - start))
                 test_correct, test_total, test_acc = \
                     sample_test_acc(student_exe, X=X_test, Y=Y_test, label_num=10,
                                     minibatch_size=minibatch_size)
@@ -305,16 +323,16 @@ def DistilledSGLD(teacher_sym, student_sym,
                 teacher_train_correct, teacher_train_total, teacher_train_acc = \
                     sample_test_acc(teacher_exe, X=X, Y=Y, label_num=10,
                                     minibatch_size=minibatch_size)
-                print "Student: Test ACC %d/%d=%f, Train ACC %d/%d=%f" % (test_correct, test_total,
-                                                    test_acc, train_correct, train_total, train_acc)
-                print "Teacher: Test ACC %d/%d=%f, Train ACC %d/%d=%f" \
+                print("Student: Test ACC %d/%d=%f, Train ACC %d/%d=%f" % (test_correct, test_total,
+                                                    test_acc, train_correct, train_total, train_acc))
+                print("Teacher: Test ACC %d/%d=%f, Train ACC %d/%d=%f" \
                       % (teacher_test_correct, teacher_test_total, teacher_test_acc,
-                         teacher_train_correct, teacher_train_total, teacher_train_acc)
+                         teacher_train_correct, teacher_train_total, teacher_train_acc))
             else:
-                print "Current Iter Num: %d" % (i + 1), "Time Spent: %f" % (end - start), "MSE:",
-                print sample_test_regression(exe=student_exe, X=X_test, Y=Y_test,
+                print("Current Iter Num: %d" % (i + 1), "Time Spent: %f" % (end - start), "MSE:",
+                       sample_test_regression(exe=student_exe, X=X_test, Y=Y_test,
                                              minibatch_size=minibatch_size,
-                                             save_path='regression_DSGLD.txt')
+                                             save_path='regression_DSGLD.txt'))
             start = time.time()
 
     return student_exe, student_params, student_params_grad

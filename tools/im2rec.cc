@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- *  Copyright (c) 2015 by Contributors
  * \file im2rec.cc
  * \brief convert images into image recordio format
  *  Image Record Format: zeropad[64bit] imid[64bit] img-binary-content
@@ -53,7 +71,7 @@ int main(int argc, char *argv[]) {
            "\tnsplit=NSPLIT[default=1] used for part generation, logically split the image.list to NSPLIT parts by position\n"\
            "\tpart=PART[default=0] used for part generation, pack the images from the specific part in image.list\n"\
            "\tcenter_crop=CENTER_CROP[default=0] specify whether to crop the center image to make it square.\n"\
-           "\tquality=QUALITY[default=80] JPEG quality for encoding (1-100, default: 80) or PNG compression for encoding (1-9, default: 3).\n"\
+           "\tquality=QUALITY[default=95] JPEG quality for encoding (1-100, default: 95) or PNG compression for encoding (1-9, default: 3).\n"\
            "\tencoding=ENCODING[default='.jpg'] Encoding type. Can be '.jpg' or '.png'\n"\
            "\tinter_method=INTER_METHOD[default=1] NN(0) BILINEAR(1) CUBIC(2) AREA(3) LANCZOS4(4) AUTO(9) RAND(10).\n"\
            "\tunchanged=UNCHANGED[default=0] Keep the original image encoding, size and color. If set to 1, it will ignore the others parameters.\n");
@@ -65,7 +83,7 @@ int main(int argc, char *argv[]) {
   int nsplit = 1;
   int partid = 0;
   int center_crop = 0;
-  int quality = 80;
+  int quality = 95;
   int color_mode = CV_LOAD_IMAGE_COLOR;
   int unchanged = 0;
   int inter_method = CV_INTER_LINEAR;
@@ -73,13 +91,13 @@ int main(int argc, char *argv[]) {
   for (int i = 4; i < argc; ++i) {
     char key[128], val[128];
     int effct_len = 0;
-    
+
 #ifdef _MSC_VER
     effct_len = sscanf_s(argv[i], "%[^=]=%s", key, sizeof(key), val, sizeof(val));
 #else
     effct_len = sscanf(argv[i], "%[^=]=%s", key, val);
 #endif
-    
+
     if (effct_len == 2) {
       if (!strcmp(key, "resize")) new_size = atoi(val);
       if (!strcmp(key, "label_width")) label_width = atoi(val);

@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- * Copyright (c) 2015 by Contributors
  * \file engine.h
  * \brief Engine that schedules all the operations according to dependency.
  */
@@ -8,6 +26,7 @@
 
 #include <dmlc/base.h>
 #if DMLC_USE_CXX11
+#include <algorithm>
 #include <memory>
 #include <functional>
 #endif
@@ -106,12 +125,14 @@ class MXNET_API Engine {
    *                   mutate.
    * \param mutable_vars The variables that current operation will mutate.
    * \param prop Property of the function.
+   * \param opr_name The operator name.
    * \return The new operator allocated.
    */
   virtual OprHandle NewOperator(AsyncFn fn,
                                 std::vector<VarHandle> const& const_vars,
                                 std::vector<VarHandle> const& mutable_vars,
-                                FnProperty prop = FnProperty::kNormal) = 0;
+                                FnProperty prop = FnProperty::kNormal,
+                                const char* opr_name = nullptr) = 0;
   /*!
    * \brief Delete the given operator.
    * \param op The operator to delete.
@@ -125,8 +146,9 @@ class MXNET_API Engine {
    * \param op The operator to push.
    * \param exec_ctx Execution context.
    * \param priority Priority of the action, as hint to the engine.
+   * \param profiling The variable indicate whether to profile this operator.
    */
-  virtual void Push(OprHandle op, Context exec_ctx, int priority = 0) = 0;
+  virtual void Push(OprHandle op, Context exec_ctx, int priority = 0, bool profiling = false) = 0;
   /*!
    * \brief Push an asynchronous operation to the engine.
    * \param exec_fun Execution function, this function takes a parameter
@@ -138,12 +160,14 @@ class MXNET_API Engine {
    * \param mutable_vars The variables that current operation will mutate.
    * \param prop Property of the function.
    * \param priority Priority of the action, as hint to the engine.
+   * \param opr_name The operator name.
    */
   virtual void PushAsync(AsyncFn exec_fun, Context exec_ctx,
                          std::vector<VarHandle> const& const_vars,
                          std::vector<VarHandle> const& mutable_vars,
                          FnProperty prop = FnProperty::kNormal,
-                         int priority = 0) = 0;
+                         int priority = 0,
+                         const char* opr_name = nullptr) = 0;
   /*!
    * \brief Schedule the deletion of a variable.
    *
@@ -192,21 +216,21 @@ class MXNET_API Engine {
    * \param mutable_vars The variables that current operation will mutate.
    * \param prop Property of the function.
    * \param priority Priority of the action, as hint to the engine.
+   * \param opr_name The operator name.
    * \tparam SyncFn the synchronous function to be pushed.
    */
-  template<typename SyncFn>
   inline void PushSync(SyncFn exec_fn, Context exec_ctx,
                        std::vector<VarHandle> const& const_vars,
                        std::vector<VarHandle> const& mutable_vars,
                        FnProperty prop = FnProperty::kNormal,
-                       int priority = 0) {
+                       int priority = 0,
+                       const char* opr_name = nullptr) {
     this->PushAsync([exec_fn](RunContext ctx, CallbackOnComplete on_complete) {
         exec_fn(ctx);
         on_complete();
-      }, exec_ctx, const_vars, mutable_vars, prop, priority);
+      }, exec_ctx, const_vars, mutable_vars, prop, priority, opr_name);
   }
 
- protected:
   /*!
    * \brief factory function to create OnComplete callback.
    * \param callback th static callback function.
@@ -219,6 +243,27 @@ class MXNET_API Engine {
     ret.engine_ = this;
     ret.param_ = param;
     return ret;
+  }
+  // For each var vector, sort it and remove the duplicated vars.
+  // Also remove vars from read_vars if it also appears in write_vars
+  inline void DeduplicateVarHandle(std::vector<engine::VarHandle> *read_vars,
+                                   std::vector<engine::VarHandle> *write_vars) {
+    std::sort(write_vars->begin(), write_vars->end());
+    write_vars->resize(std::unique(write_vars->begin(), write_vars->end()) -
+                      write_vars->begin());
+    std::sort(read_vars->begin(), read_vars->end());
+    read_vars->resize(std::unique(read_vars->begin(), read_vars->end()) -
+                      read_vars->begin());
+    auto wit = write_vars->begin();
+    auto rtop = read_vars->begin();
+    for (auto rit = read_vars->begin(); rit != read_vars->end(); ++rit) {
+      while (wit != write_vars->end() && *wit < *rit) ++wit;
+      if (wit == write_vars->end() || *wit != *rit) {
+        *rtop = *rit;
+        ++rtop;
+      }
+    }
+    read_vars->resize(rtop - read_vars->begin());
   }
 };  // class Engine
 #endif  // DMLC_USE_CXX11

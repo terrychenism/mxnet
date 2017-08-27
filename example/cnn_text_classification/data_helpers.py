@@ -1,7 +1,25 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import numpy as np
 import re
 import itertools
 from collections import Counter
+import os
 # from gensim.models import word2vec
 
 def clean_str(string):
@@ -31,9 +49,15 @@ def load_data_and_labels():
     Returns split sentences and labels.
     """
     # Load data from files
-    positive_examples = list(open("./data/rt-polaritydata/rt-polarity.pos").readlines())
+    pos_path = "./data/rt-polaritydata/rt-polarity.pos"
+    neg_path = "./data/rt-polaritydata/rt-polarity.neg"
+    if not os.path.exists(pos_path):
+        os.system("git clone https://github.com/dennybritz/cnn-text-classification-tf.git")
+        os.system('mv cnn-text-classification-tf/data .')
+        os.system('rm -rf cnn-text-classification-tf')
+    positive_examples = list(open(pos_path).readlines())
     positive_examples = [s.strip() for s in positive_examples]
-    negative_examples = list(open("./data/rt-polaritydata/rt-polarity.neg").readlines())
+    negative_examples = list(open(neg_path).readlines())
     negative_examples = [s.strip() for s in negative_examples]
     # Split by words
     x_text = positive_examples + negative_examples

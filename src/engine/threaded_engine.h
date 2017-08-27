@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- * Copyright (c) 2015 by Contributors
  * \file threaded_engine.h
  * \brief Implements base class of threaded engine
  *    that tracks the dependency and pushes actions to execute.
@@ -16,7 +34,9 @@
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <thread>
 #include "./engine_impl.h"
+#include "./profiler.h"
 #include "../common/object_pool.h"
 
 namespace mxnet {
@@ -50,6 +70,10 @@ struct OprBlock : public common::ObjectPoolAllocatable<OprBlock> {
   Context ctx;
   /*! \brief priority of the function */
   int priority;
+  /*! \brief indicate whether to profile this operator */
+  bool profiling{false};
+  /*! \brief operator execution statistics */
+  OprExecStat *opr_stat;
   // define possible debug information
   DEFINE_ENGINE_DEBUG_INFO(OprBlock);
   /*!
@@ -199,8 +223,10 @@ struct ThreadedOpr final : public Opr,
   std::vector<ThreadedVar*> const_vars;
   /*! \brief The variable this operation will mutate. */
   std::vector<ThreadedVar*> mutable_vars;
-  /*! \brief the property of the operator */
+  /*! \brief The property of the operator */
   FnProperty prop;
+  /*! \brief The name of the operator */
+  const char* opr_name{nullptr};
   /*!
    * \brief Whether this is an temporary operator
    *        that can be deleted right after the operation completed.
@@ -234,14 +260,16 @@ class ThreadedEngine : public Engine {
   ThreadedOpr* NewOperator(AsyncFn fn,
                            std::vector<VarHandle> const& const_vars,
                            std::vector<VarHandle> const& mutable_vars,
-                           FnProperty prop) override;
+                           FnProperty prop = FnProperty::kNormal,
+                           const char* opr_name = nullptr) override;
   void DeleteOperator(OprHandle op) override;
-  void Push(OprHandle op, Context exec_ctx, int priority) override;
+  void Push(OprHandle op, Context exec_ctx, int priority = 0, bool profiling = false) override;
   void PushAsync(AsyncFn exec_fun, Context exec_ctx,
                  std::vector<VarHandle> const& const_vars,
                  std::vector<VarHandle> const& mutable_vars,
-                 FnProperty prop,
-                 int priority) override;
+                 FnProperty prop = FnProperty::kNormal,
+                 int priority = 0,
+                 const char* opr_name = nullptr) override;
   void DeleteVariable(SyncFn delete_fn, Context exec_ctx, VarHandle var) override;
   void WaitForVar(VarHandle var) override;
   void WaitForAll() override;
@@ -283,8 +311,21 @@ class ThreadedEngine : public Engine {
    */
   void ExecuteOprBlock(RunContext run_ctx, OprBlock *opr_block) {
     ThreadedOpr* threaded_opr = opr_block->opr;
+#if MXNET_USE_PROFILER
+    if (opr_block->profiling && threaded_opr->opr_name) {
+      const Context& ctx = opr_block->ctx;
+      opr_block->opr_stat = Profiler::Get()->AddOprStat(ctx.dev_type, ctx.dev_id);
+      uint64_t id = std::hash<std::thread::id>()(std::this_thread::get_id());
+      opr_block->opr_stat->thread_id = id;
+      strncpy(opr_block->opr_stat->opr_name,
+        threaded_opr->opr_name,
+        sizeof(opr_block->opr_stat->opr_name) - 1);
+      // record operator start timestamp
+      SetOprStart(opr_block->opr_stat);
+    }
+#endif
     CallbackOnComplete callback = this->CreateCallback(
-        ThreadedEngine::OnCompleteStatic, threaded_opr);
+        ThreadedEngine::OnCompleteStatic, opr_block);
     bool debug_info = (engine_info_ && debug_push_opr_ == opr_block);
     if (debug_info) {
       LOG(INFO) << "ExecuteOprBlock " << opr_block
@@ -317,8 +358,6 @@ class ThreadedEngine : public Engine {
     } else {
       callback();
     }
-
-    OprBlock::Delete(opr_block);
   }
 
  private:

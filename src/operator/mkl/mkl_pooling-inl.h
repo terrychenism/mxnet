@@ -32,40 +32,11 @@
 namespace mxnet {
 namespace op {
 
-  bool UseMKLPooling(PoolingParam param, std::vector<TShape> *in_shape,
-                      std::vector<TShape> *out_shape) {
-  if (param.kernel.ndim() != 2) {
-    return false;
-  }
-  if (param.pooling_convention == pool_enum::kFull) {
-    return true;
-  } else {
-    TShape input_shape = (*in_shape)[pool_enum::kData];
-    TShape output_shape = (*out_shape)[pool_enum::kOut];
-    const size_t input_height = input_shape[2];
-    const size_t input_width = input_shape[3];
-    const size_t output_height = output_shape[2];
-    const size_t output_width = output_shape[3];
-    size_t full_model_output_height =
-        1 + static_cast<int>(ceil(static_cast<float>(
-                input_height + 2 * param.pad[0] -
-                param.kernel[0]) / param.stride[0]));
-    size_t full_model_output_width =
-        1 + static_cast<int>(ceil(static_cast<float>(
-                input_width + 2 * param.pad[1] -
-                param.kernel[1]) / param.stride[1]));
-    if ((full_model_output_height == output_height) || (full_model_output_width == output_width)) {
-      return true;
-    } else {
-      return false;
-    }
-  }
-}
 
 template<typename xpu, typename DType>
 class MKLPoolingOp : public Operator {
  public:
-  std::string getName() {
+  static std::string getName() {
     return "MKLPoolingOp";
   }
   explicit MKLPoolingOp(PoolingParam p) {
@@ -130,23 +101,8 @@ class MKLPoolingOp : public Operator {
       CHECK_LT(pad_h_, kernel_h_);
       CHECK_LT(pad_w_, kernel_w_);
     }
-
-    pooled_height_ = static_cast<int>(ceil(static_cast<float>(
-                                      height_ + 2 * pad_h_ - kernel_h_) / stride_h_)) + 1;
-    pooled_width_ = static_cast<int>(ceil(static_cast<float>(
-                                     height_ + 2 * pad_w_ - kernel_w_) / stride_w_)) + 1;
-    if (pad_h_ || pad_w_) {
-      // If we have padding, ensure that the last pooling starts strictly
-      // inside the image (instead of at the padding); otherwise clip the last.
-      if ((pooled_height_ - 1) * stride_h_ >= height_ + pad_h_) {
-        --pooled_height_;
-      }
-      if ((pooled_width_ - 1) * stride_w_ >= height_ + pad_w_) {
-        --pooled_width_;
-      }
-      CHECK_LT((pooled_height_ - 1) * stride_h_, height_ + pad_h_);
-      CHECK_LT((pooled_width_ - 1) * stride_w_, height_ + pad_w_);
-    }
+    pooled_height_ = out.shape_[2];
+    pooled_width_ = out.shape_[3];
 
     size_t dim = 4;
     size_t src_sizes[4], src_strides[4];
@@ -169,6 +125,8 @@ class MKLPoolingOp : public Operator {
     dst_strides[3] = dst_sizes[0] * dst_sizes[1] * dst_sizes[2];
     src_offset[0] = -pad_w_;
     src_offset[1] = -pad_h_;
+    src_offset[2] = -pad_w_;
+    src_offset[3] = -pad_h_;
     kernel_stride[0] = stride_w_;
     kernel_stride[1] = stride_h_;
     kernel_size[0] = kernel_w_;
@@ -223,7 +181,9 @@ class MKLPoolingOp : public Operator {
       algorithm = dnnAlgorithmPoolingMax;
       break;
     case pool_enum::kAvgPooling:
-      algorithm = dnnAlgorithmPoolingAvg;
+      algorithm = (param_.pooling_convention == pool_enum::kValid) ?
+          dnnAlgorithmPoolingAvgIncludePadding : dnnAlgorithmPoolingAvg;
+
       break;
     default:
       LOG(FATAL) << "Unknown pooling method.";
@@ -237,19 +197,31 @@ class MKLPoolingOp : public Operator {
     bottom_data =
           reinterpret_cast<void *>(mkl_prv_data<DType>(in_data[pool_enum::kData]));
 #endif
+    dnnBorder_t border_type = dnnBorderZerosAsymm;
+    switch (param_.pooling_convention) {
+    case pool_enum::kFull:
+      border_type = dnnBorderZeros;
+      break;
+    case pool_enum::kValid:
+      border_type = dnnBorderZerosAsymm;
+      break;
+    default:
+      border_type = dnnBorderZerosAsymm;
+      break;
+    }
     if (NULL == bottom_data) {
       bottom_data = data.dptr_;
       if (NULL == poolingFwd) {
         status = dnnPoolingCreateForward<DType>(&poolingFwd, NULL,
                                                 algorithm, fwd_bottom_data->layout_usr,
                                                 kernel_size, kernel_stride,
-                                                src_offset, dnnBorderZeros);
+                                                src_offset, border_type);
       CHECK_EQ(status, E_SUCCESS);
       // Now create poolingBwd
       status = dnnPoolingCreateBackward<DType>(&poolingBwd, NULL,
                                                algorithm, fwd_bottom_data->layout_usr,
                                                kernel_size, kernel_stride,
-                                               src_offset, dnnBorderZeros);
+                                               src_offset, border_type);
       CHECK_EQ(status, E_SUCCESS);
       }
     }
@@ -269,7 +241,7 @@ class MKLPoolingOp : public Operator {
           status = dnnPoolingCreateForward<DType>(&poolingFwd, NULL,
                                                   algorithm, fwd_bottom_data->layout_int,
                                                   kernel_size, kernel_stride,
-                                                  src_offset, dnnBorderZeros);
+                                                  src_offset, border_type);
           CHECK_EQ(status, E_SUCCESS);
           fwd_top_data->create_internal_layout(poolingFwd, dnnResourceDst);
 
@@ -277,7 +249,7 @@ class MKLPoolingOp : public Operator {
           status = dnnPoolingCreateBackward<DType>(&poolingBwd, NULL,
                                                    algorithm, fwd_bottom_data->layout_int,
                                                    kernel_size, kernel_stride,
-                                                   src_offset, dnnBorderZeros);
+                                                   src_offset, border_type);
           CHECK_EQ(status, E_SUCCESS);
           bwd_top_diff->create_internal_layout(poolingFwd, dnnResourceDst);
           bwd_bottom_diff->create_internal_layout(poolingFwd, dnnResourceSrc);
@@ -303,15 +275,9 @@ class MKLPoolingOp : public Operator {
     }
     pooling_res[dnnResourceSrc] = bottom_data;
     pooling_res[dnnResourceWorkspace] = max_idx_data;
-    if (fwd_top_data->conversion_needed()) {
-#if MKL_EXPERIMENTAL == 1
-    std::shared_ptr<MKLMemHolder> top_mem = out_data[pool_enum::kOut].Mkl_mem_;
-      top_mem->set_prv_descriptor(fwd_top_data, true);
-#endif
-      pooling_res[dnnResourceDst] = reinterpret_cast<void *>(fwd_top_data->prv_ptr());
-    } else {
-      pooling_res[dnnResourceDst] = reinterpret_cast<void *>(out.dptr_);
-    }
+
+    pooling_res[dnnResourceDst] = fwd_top_data->get_output_ptr(
+      out.dptr_, fwd_top_data, out_data[pool_enum::kOut]);
     status = dnnExecute<DType>(poolingFwd, pooling_res);
     CHECK_EQ(status, E_SUCCESS);
 #if MKL_EXPERIMENTAL == 0
@@ -349,23 +315,11 @@ class MKLPoolingOp : public Operator {
     void* pooling_res[dnnResourceNumber];
     pooling_res[dnnResourceWorkspace] = reinterpret_cast<void *>(max_idx_data);
 
-    std::shared_ptr<MKLMemHolder> top_diff_mem =
-#if MKL_EXPERIMENTAL == 1
-      out_grad[pool_enum::kOut].Mkl_mem_;
-#else
-      NULL;
-#endif
     pooling_res[dnnResourceDiffDst] =
-      bwd_top_diff->get_converted_prv(grad.dptr_, true, top_diff_mem);
-    if (bwd_bottom_diff->conversion_needed()) {
-      pooling_res[dnnResourceDiffSrc] = bwd_bottom_diff->prv_ptr();
-#if MKL_EXPERIMENTAL == 1
-      std::shared_ptr<MKLMemHolder> bottom_diff_mem = in_grad[pool_enum::kData].Mkl_mem_;
-      bottom_diff_mem->set_prv_descriptor(bwd_bottom_diff);
-#endif
-    } else {
-      pooling_res[dnnResourceDiffSrc] = input_grad.dptr_;
-    }
+      bwd_top_diff->get_converted_prv(grad.dptr_, true, out_grad[pool_enum::kOut]);
+
+    pooling_res[dnnResourceDiffSrc] = bwd_bottom_diff->get_output_ptr(
+      input_grad.dptr_, bwd_bottom_diff, in_grad[pool_enum::kData]);
     e = dnnExecute<DType>(poolingBwd, pooling_res);
     CHECK_EQ(e, E_SUCCESS);
 #if MKL_EXPERIMENTAL == 0
@@ -388,7 +342,7 @@ class MKLPoolingOp : public Operator {
  private:
   size_t kernel_size[2],
          kernel_stride[4];
-  int src_offset[2];
+  int src_offset[4];  // 2*(dimension-2)
   dnnPrimitive_t poolingFwd, poolingBwd;
   DType *max_idx_data;
 

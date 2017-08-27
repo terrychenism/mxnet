@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import numpy as np
 from skimage import io, transform
 from skimage.restoration import denoise_tv_chambolle
@@ -13,7 +30,7 @@ def PreprocessContentImage(path, short_edge, dshape=None):
     new_size = (int(img.shape[0] * factor), int(img.shape[1] * factor))
     resized_img = transform.resize(img, new_size)
     sample = np.asarray(resized_img) * 256
-    if dshape != None:
+    if dshape is not None:
         # random crop
         xx = int((sample.shape[0] - dshape[2]))
         yy = int((sample.shape[1] - dshape[3]))

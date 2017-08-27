@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- * Copyright (c) 2015 by Contributors
  * \file threaded_engine.cc
  * \brief implements base threaded engine.
  * \author Yutian Li
@@ -186,9 +204,11 @@ ThreadedOpr* ThreadedEngine::NewOperator(
     ThreadedEngine::AsyncFn fn,
     std::vector<VarHandle> const& const_vars,
     std::vector<VarHandle> const& mutable_vars,
-    FnProperty prop) {
+    FnProperty prop,
+    const char* opr_name) {
   auto ret = ThreadedOpr::New();
-  ret->fn = fn;
+  ret->opr_name = opr_name;
+  ret->fn = std::move(fn);
   ret->prop = prop;
   ret->const_vars.resize(const_vars.size());
   ret->mutable_vars.resize(mutable_vars.size());
@@ -249,10 +269,11 @@ void ThreadedEngine::DeleteOperator(OprHandle op) {
               threaded_opr->mutable_vars.end());
   this->PushSync([threaded_opr](RunContext) {
       ThreadedOpr::Delete(threaded_opr);
-    }, Context::CPU(), {}, deps, FnProperty::kAsync);
+    }, Context::CPU(), {}, deps, FnProperty::kAsync, 0,
+    PROFILER_MESSAGE("DeleteOperator"));
 }
 
-void ThreadedEngine::Push(OprHandle op, Context exec_ctx, int priority) {
+void ThreadedEngine::Push(OprHandle op, Context exec_ctx, int priority, bool profiling) {
   ThreadedOpr* threaded_opr = ThreadedOpr::CastFromBase(op);
   OprBlock* opr_block = OprBlock::New();
   opr_block->opr = threaded_opr;
@@ -262,6 +283,7 @@ void ThreadedEngine::Push(OprHandle op, Context exec_ctx, int priority) {
       threaded_opr->mutable_vars.size() + 1));
   opr_block->ctx = exec_ctx;
   opr_block->priority = priority;
+  opr_block->profiling = profiling;
   ++pending_;
   // Add read dependencies.
   for (auto&& i : threaded_opr->const_vars) {
@@ -279,10 +301,19 @@ void ThreadedEngine::Push(OprHandle op, Context exec_ctx, int priority) {
 void ThreadedEngine::PushAsync(AsyncFn fn, Context exec_ctx,
                                std::vector<VarHandle> const& const_vars,
                                std::vector<VarHandle> const& mutable_vars,
-                               FnProperty prop, int priority) {
-  ThreadedOpr *opr = NewOperator(fn, const_vars, mutable_vars, prop);
+                               FnProperty prop,
+                               int priority,
+                               const char* opr_name) {
+  ThreadedOpr *opr = NewOperator(std::move(fn), const_vars, mutable_vars, prop, opr_name);
   opr->temporary = true;
-  Push(opr, exec_ctx, priority);
+#if MXNET_USE_PROFILER
+  Profiler *profiler = Profiler::Get();
+  bool profiling = (profiler->GetState() == Profiler::kRunning) &&
+                   (profiler->GetMode() == Profiler::kAllOperator);
+#else
+  bool profiling = false;
+#endif
+  Push(opr, exec_ctx, priority, profiling);
 }
 
 void ThreadedEngine::DeleteVariable(SyncFn delete_fn,
@@ -294,7 +325,8 @@ void ThreadedEngine::DeleteVariable(SyncFn delete_fn,
       // so during `ThreadedEngine::OnComplete` it could be recycled.
       threaded_var->SetToDelete();
       delete_fn(ctx);
-    }, exec_ctx, {}, {var}, FnProperty::kAsync);
+    }, exec_ctx, {}, {var}, FnProperty::kAsync, 0,
+    PROFILER_MESSAGE("DeleteVariable"));
 }
 
 void ThreadedEngine::WaitForVar(VarHandle var) {
@@ -317,7 +349,8 @@ void ThreadedEngine::WaitForVar(VarHandle var) {
       if (engine_info_) {
         LOG(INFO) << "Sync is notified";
       }
-    }, Context::CPU(), {var}, {}, FnProperty::kNormal);
+    }, Context::CPU(), {var}, {}, FnProperty::kNormal, 0,
+    PROFILER_MESSAGE("WaitForVar"));
   {
     std::unique_lock<std::mutex> lock{finished_m_};
     finished_cv_.wait(lock, [this, &done]() {
@@ -334,6 +367,7 @@ void ThreadedEngine::WaitForAll() {
 }
 
 inline void ThreadedEngine::OnComplete(ThreadedOpr* threaded_opr) {
+  bool is_temporary_opr = threaded_opr->temporary;
   // Mark complete for read variables
   for (auto&& i : threaded_opr->const_vars) {
     i->CompleteReadDependency([this](OprBlock* opr) {
@@ -361,6 +395,10 @@ inline void ThreadedEngine::OnComplete(ThreadedOpr* threaded_opr) {
       ThreadedVar::Delete(i);
     }
   }
+  // The function been pushed from `ThreadedEngine::DeleteOperator`
+  // could execute right after we mark all vars as complete, so if
+  // threaded_opr is not temporary, its value is not reliable
+  // anymore start from here.
   int npending;
   {
     std::unique_lock<std::mutex> lock{finished_m_};
@@ -373,15 +411,23 @@ inline void ThreadedEngine::OnComplete(ThreadedOpr* threaded_opr) {
   }
 
   // delte operator if it is temperory
-  if (threaded_opr->temporary) {
+  if (is_temporary_opr) {
     ThreadedOpr::Delete(threaded_opr);
   }
 }
 
 void ThreadedEngine::OnCompleteStatic(
-    Engine *engine, void *threaded_opr) {
-  static_cast<ThreadedEngine*>(engine)->OnComplete(
-      static_cast<ThreadedOpr*>(threaded_opr));
+    Engine *engine, void *opr_block_) {
+  OprBlock *opr_block = static_cast<OprBlock*>(opr_block_);
+  ThreadedOpr *threaded_opr = opr_block->opr;
+#if MXNET_USE_PROFILER
+  if (opr_block->profiling && threaded_opr->opr_name) {
+    // record operator end timestamp
+    SetOprEnd(opr_block->opr_stat);
+  }
+#endif
+  static_cast<ThreadedEngine*>(engine)->OnComplete(threaded_opr);
+  OprBlock::Delete(opr_block);
 }
 
 }  // namespace engine

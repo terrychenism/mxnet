@@ -24,6 +24,9 @@ export CC = gcc
 export CXX = g++
 export NVCC = nvcc
 
+# whether compile with options for MXNet developer
+DEV = 0
+
 # whether compile with debug
 DEBUG = 0
 
@@ -62,6 +65,10 @@ USE_OPENMP = 0
 # choose the version of blas you want to use
 # can be: mkl, blas, atlas, openblas
 USE_BLAS = apple
+
+# whether use lapack during compilation
+# only effective when compiled with blas versions openblas/apple/atlas/mkl
+USE_LAPACK = 1
 
 # add path to intel library, you may need it for MKL, if you did not add the path
 # to environment variable

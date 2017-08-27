@@ -24,8 +24,14 @@ export CC = gcc
 export CXX = g++
 export NVCC = nvcc
 
+# whether compile with options for MXNet developer
+DEV = 0
+
 # whether compile with debug
 DEBUG = 0
+
+# whether compiler with profiler
+USE_PROFILER =
 
 # the additional link flags you want to add
 ADD_LDFLAGS =
@@ -59,15 +65,23 @@ USE_OPENCV = 1
 # use openmp for parallelization
 USE_OPENMP = 1
 
+# MKL ML Library for Intel CPU/Xeon Phi
+# Please refer to MKL_README.md for details
+
+# MKL ML Library folder, need to be root for /usr/local
+# Change to User Home directory for standard user
+# For USE_BLAS!=mkl only
+MKLML_ROOT=/usr/local
+
 # whether use MKL2017 library
 USE_MKL2017 = 0
 
 # whether use MKL2017 experimental feature for high performance
+# Prerequisite USE_MKL2017=1
 USE_MKL2017_EXPERIMENTAL = 0
 
 # whether use NNPACK library
 USE_NNPACK = 0
-USE_NNPACK_NUM_THREADS = 4
 
 # choose the version of blas you want to use
 # can be: mkl, blas, atlas, openblas
@@ -79,13 +93,22 @@ else
 USE_BLAS = atlas
 endif
 
+# whether use lapack during compilation
+# only effective when compiled with blas versions openblas/apple/atlas/mkl
+USE_LAPACK = 1
+
+# path to lapack library in case of a non-standard installation
+USE_LAPACK_PATH =
+
 # add path to intel library, you may need it for MKL, if you did not add the path
 # to environment variable
 USE_INTEL_PATH = NONE
 
-# If use MKL, choose static link automatically to allow python wrapper
+# If use MKL only for BLAS, choose static link automatically to allow python wrapper
+ifeq ($(USE_MKL2017), 0)
 ifeq ($(USE_BLAS), mkl)
 USE_STATIC_MKL = 1
+endif
 else
 USE_STATIC_MKL = NONE
 endif
@@ -126,6 +149,12 @@ USE_S3 = 0
 # path to folders containing projects specific operators that you don't want to put in src/operators
 EXTRA_OPERATORS =
 
+#----------------------------
+# other features
+#----------------------------
+
+# Create C++ interface package
+USE_CPP_PACKAGE = 0
 
 #----------------------------
 # plugins

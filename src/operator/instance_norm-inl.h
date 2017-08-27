@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- * Copyright (c) 2015 by Contributors
  * \file instance_norm-inl.h
  * \brief Reproducing paper Instance Normalization: The Missing Ingredient for
  * Fast Stylization, D. Ulyanov, A. Vedaldi, V. Lempitsky, 2016
@@ -30,7 +48,7 @@ struct InstanceNormParam : public dmlc::Parameter<InstanceNormParam> {
   float eps;
   DMLC_DECLARE_PARAMETER(InstanceNormParam) {
     DMLC_DECLARE_FIELD(eps).set_default(1e-3f).describe(
-        "Epsilon to prevent division by 0.");
+        "An `epsilon` parameter to prevent division by 0.");
   }
 };  // struct InstanceNormParam
 
@@ -44,11 +62,11 @@ class InstanceNormOp : public Operator {
                        const std::vector<TBlob> &aux_states) {
     using namespace mshadow;
     using namespace mshadow::expr;
-    CHECK_EQ(in_data.size(), 3);
-    CHECK_EQ(out_data.size(), 3);
+    CHECK_EQ(in_data.size(), 3U);
+    CHECK_EQ(out_data.size(), 3U);
 
     CHECK_GE(in_data[instance_norm::kData].ndim(), 3)
-        << "InstanceNorm only supports input tensors of rank > 2.";
+        << "InstanceNorm only supports input tensors of rank >= 3.";
 
     Stream<xpu> *s = ctx.get_stream<xpu>();
     int n = in_data[instance_norm::kData].size(0);
@@ -91,10 +109,10 @@ class InstanceNormOp : public Operator {
                         const std::vector<TBlob> &aux_states) {
     using namespace mshadow;
     using namespace mshadow::expr;
-    CHECK_EQ(in_data.size(), 3);
-    CHECK_EQ(out_data.size(), 3);
+    CHECK_EQ(in_data.size(), 3U);
+    CHECK_EQ(out_data.size(), 3U);
 
-    CHECK_GE(in_data[instance_norm::kData].Size(), 3)
+    CHECK_GE(in_data[instance_norm::kData].ndim(), 3U)
         << "InstanceNorm only supports input tensors of rank > 2.";
 
     Stream<xpu> *s = ctx.get_stream<xpu>();
@@ -187,7 +205,7 @@ class InstanceNormProp : public OperatorProperty {
   bool InferShape(std::vector<TShape> *in_shape, std::vector<TShape> *out_shape,
                   std::vector<TShape> *aux_shape) const override {
     using namespace mshadow;
-    CHECK_EQ(in_shape->size(), 3) << "Input:[data]";
+    CHECK_EQ(in_shape->size(), 3U) << "Input:[data]";
     const TShape &dshape = in_shape->at(0);
     if (dshape.ndim() == 0) return false;
 

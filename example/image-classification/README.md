@@ -2,7 +2,7 @@
 
 This fold contains examples for image classification. The goal of image
 classifcation is to identify the objects contained in images. The following
-[example](http://mxnet.io/tutorials/python/predict_imagenet.html) shows
+[example](http://mxnet.io/tutorials/python/predict_image.html) shows
 recognized object classes with corresponding probabilities using a pre-traind
 model.
 
@@ -39,7 +39,7 @@ commonly used options are listed as following:
 
 | Argument                      | Comments                                 |
 | ----------------------------- | ---------------------------------------- |
-| `network`                     | The network to train, which is defined in [symbol/](https://github.com/dmlc/mxnet/tree/master/example/image-classification/symbol). Some networks may accept additional arguments, such as `--num-layers` is used to specify the number of layers in ResNet. |
+| `network`                     | The network to train, which is defined in [symbol/](https://github.com/dmlc/mxnet/tree/master/example/image-classification/symbols). Some networks may accept additional arguments, such as `--num-layers` is used to specify the number of layers in ResNet. |
 | `data-train`, `data-val`      | The data for training and validation. It can be either a filename or a directory. For the latter, all files in the directory will be used. But if `--benchmark 1` is used, then there two arguments will be ignored. |
 | `gpus`                        | The list of GPUs to use, such as `0` or `0,3,4,7`. If an empty string `''` is given, then we will use CPU. |
 | `batch-size`                  | The batch size for SGD training. It specifies the number of examples used for each SGD iteration. If we use *k* GPUs, then each GPU will compute *batch_size/k* examples in each time. |
@@ -64,7 +64,7 @@ the same directory. All these class directories are then in the same root
 training and `mydata_val.rec` for validation, and the former contains 95%
 images.
 
-We first prepare two `lst` files, which consist of the labels and image paths
+We first prepare two `.lst` files, which consist of the labels and image paths
 can be used for generating `rec` files.
 
 ```bash
@@ -72,11 +72,11 @@ python tools/im2rec.py --list True --recursive True --train-ratio 0.95 mydata im
 ```
 
 Then we generate the `.rec` files. We resize the images such that the short edge
-is at least 480px and save them with 90/100 quality. We also use 16 threads to
+is at least 480px and save them with 95/100 quality. We also use 16 threads to
 accelerate the packing.
 
 ```bash
-python tools/im2rec.py --resize 480 --quality 90 --num-thread 16 mydata img_data
+python tools/im2rec.py --resize 480 --quality 95 --num-thread 16 mydata img_data
 ```
 
 Hints:
@@ -102,13 +102,13 @@ We provide multiple pre-trained models on various datasets. Use
 [common/modelzone.py](https://github.com/dmlc/mxnet/blob/master/example/image-classification/common/modelzoo.py)
 to download these models. These models can be used in any front-end language
 MXNet supports. For example,
-[the tutorial](http://mxnet.io/tutorials/python/predict_imagenet.html) shows how
+[the tutorial](http://mxnet.io/tutorials/python/predict_image.html) shows how
 to classify an image with jupyter notebook.
 
 ### ImageNet 1K
 
 It is first used by
-[ImageNet challenge 2012](http://mxnet.io/tutorials/python/predict_imagenet.html),
+[ImageNet challenge 2012](http://www.image-net.org/challenges/LSVRC/2012/),
 which contains about 1.2M images with 1000 classes. To test these models, one
 can use
 [data/imagenet1k-val.sh](https://github.com/dmlc/mxnet/blob/master/example/image-classification/data/imagenet1k-val.sh)
@@ -118,21 +118,29 @@ to calculate the accuracy.
 
 #### Single Center Crop Accuracy
 
-| Model                     | Top-1  | Top-5  |
-| ------------------------- | ------ | ------ |
-| `imagenet1k-inception-bn` | 0.7245 | 0.9079 |
-| `imagenet1k-resnet-18`    | 0.6858 | 0.8866 |
-| `imagenet1k-resnet-34`    | 0.7244 | 0.9097 |
-| `imagenet1k-resnet-50`    | 0.7527 | 0.9258 |
-| `imagenet1k-resnet-101`   | 0.7684 | 0.9327 |
-| `imagenet1k-resnet-152`   | 0.7653 | 0.9312 |
+| Model                          | Top-1  | Top-5  |
+| ------------------------------ | ------ | ------ |
+| `imagenet1k-inception-bn`      | 0.7245 | 0.9079 |
+| `imagenet1k-resnet-18`         | 0.6858 | 0.8866 |
+| `imagenet1k-resnet-34`         | 0.7244 | 0.9097 |
+| `imagenet1k-resnet-50`         | 0.7527 | 0.9258 |
+| `imagenet1k-resnet-101`        | 0.7684 | 0.9327 |
+| `imagenet1k-resnet-152`        | 0.7653 | 0.9312 |
+| `imagenet1k-resnext-50`        | 0.7689 | 0.9332 |
+| `imagenet1k-resnext-101`       | 0.7828 | 0.9408 |
+| `imagenet1k-resnext-101-64x4d` | 0.7911 | 0.9430 |
 
 Note:
-- our Resnet dose not need to specify the RGB mean due the data batch
+- our Resnet does not need to specify the RGB mean due the data batch
   normalization layer. While the inception models needs `--rgb-mean
   123.68,116.779,103.939`
 - Resnet training logs are available at
   [tornadomeet/ResNet](https://github.com/tornadomeet/ResNet/tree/master/log)
+- We warm up our Resnext-101-64x4d by training it with 1/100 and 1/10 of the
+  base learning rate for the 1st and 2nd epoch. We use 3 p2.16xlarge instances
+  with a batch size of 384 on each node with base lr set to 0.45, and decay step
+  set at 50, 80, 110 epoch. After 133 epoch, we use one node to finetune, and
+  turn off color and scale data augmentation, with lr reduced to 1.5e-04.
 
 #### Speed and Memory Footprint:
 
@@ -218,7 +226,7 @@ file named `hosts`. The outputs of `cat hosts` may be
 Now we can run the previous cifar10 training on two machines:
 
 ```bash
-../../tools/launch.py -n 2 -H hosts \
+python ../../tools/launch.py -n 2 -H hosts \
     python train_cifar10.py --network resnet --num-layers 110 --batch-size 128 --gpus 0,1 \
     --kv-store dist_device_sync
 ```
@@ -242,28 +250,69 @@ For more usages:
 
 ### Benchmark
 
-To run benchmark on imagenet networks, use `--benchmark 1` as the argument to `train_imagenet.py`, An example is shown below:  
+To run benchmark on imagenet networks, use `--benchmark 1` as the argument to `train_imagenet.py`, An example is shown below:
 
 ```bash
 python train_imagenet.py --benchmark 1 --gpus 0,1 --network inception-v3 --batch-size 64 \
   --image-shape 3,299,299 --num-epochs 1 --kv-store device
 ```
 
-When running in benchmark mode, the script generates synthetic data of the given data shape and batch size.  
+When running in benchmark mode, the script generates synthetic data of the given data shape and batch size.
 
-The `benchmark.py` can be used to run a series of benchmarks against different image networks on a given set of workers and takes the following arguments:  
+The `benchmark.py` can be used to run a series of benchmarks against different image networks on a given set of workers and takes the following arguments:
 - `--worker_file`: file that contains a list of worker hostnames or list of worker ip addresses that have passwordless ssh enabled.
-- `--worker_count`: number of workers to run benchmark on.  
-- `--gpu_count`: number of gpus on each worker to use.  
-- `--networks`: one or more networks in the format network_name:batch_size:image_size.  
+- `--worker_count`: number of workers to run benchmark on.
+- `--gpu_count`: number of gpus on each worker to use.
+- `--networks`: one or more networks in the format network_name:batch_size:image_size.
 
-The `benchmark.py` script runs benchmarks on variable number of gpus upto gpu_count starting from 1 gpu doubling the number of gpus in each run using `kv-store=device` and after that running on variable number of nodes on all gpus starting with 1 node upto `worker_count` doubling the number of nodes used in each run using `kv-store=dist_sync_device`.  
+The `benchmark.py` script runs benchmarks on variable number of gpus upto gpu_count starting from 1 gpu doubling the number of gpus in each run using `kv-store=device` and after that running on variable number of nodes on all gpus starting with 1 node upto `worker_count` doubling the number of nodes used in each run using `kv-store=dist_sync_device`.
 
 An example to run the benchmark script is shown below with 8 workers and 16 gpus on each worker:
 ```
 python benchmark.py --worker_file /opt/deeplearning/workers --worker_count 8 \
   --gpu_count 16 --networks 'inception-v3:32:299'
 ```
+
+### Scalability Results
+
+- Hardware: 16x AWS [P2.16xlarge](https://aws.amazon.com/ec2/instance-types/p2/)
+with 256 GPUs in total.
+- Software:
+  [AWS Deep Learning AMI](https://aws.amazon.com/marketplace/pp/B01M0AXXQB) with
+  CUDA 7.5 and CUDNN 5.1 installed
+
+We fixed the batch size per GPU and then increase the number of
+GPUs. Synchronized SGD is used, namely `--kv-store dist_device_sync`. The
+following three CNNs (located in [symbol/](./symbol/)) are used
+
+|  | `alexnet` | `inception-v3` | `resnet-152` |
+| --- | --- | --- | --- |
+| batch per GPU | 512 | 32 | 32 |
+| model size (MB) | 203 | 95 | 240 |
+
+Number of images proccessed per second is shown in the following table:
+
+| #GPUs | `alexnet` | `inception-v3` | `resnet-152` |
+| --- | --- | --- | --- |
+| 1   | 457.07   | 30.4    | 20.08   |
+| 2   | 870.43   | 59.61   | 38.76   |
+| 4   | 1514.8   | 117.9   | 77.01   |
+| 8   | 2852.5   | 233.39  | 153.07  |
+| 16  | 4244.18  | 447.61  | 298.03  |
+| 32  | 7945.57  | 882.57  | 595.53  |
+| 64  | 15840.52 | 1761.24 | 1179.86 |
+| 128 | 31334.88 | 3416.2  | 2333.47 |
+| 256 | 61938.36 | 6660.98 | 4630.42 |
+
+The following figure shows the speedup against a single GPU compared to the ideal scalability.
+
+<img src="https://raw.githubusercontent.com/dmlc/web-data/master/mxnet/image/speedup-p2.png" width="600"/>
+
+### Convergence
+
+We show the convergence of training ResNet-152 on Imagenet 1K. The single machine with 8 GPUs results are from [Wei Wu](https://github.com/tornadomeet/ResNet/tree/master/log). We then trained the model using 10 machines, each machine has 8 GPUs, with the same hyper-parameters, except for we changed the total batch size from 8\*32 to 80\*32 and the initial learning rate to 0.5 instead of 0.1. The validation accuracy versus data epoch is shown as following. Both models have almost identical convergence rate.
+
+<img src="https://raw.githubusercontent.com/dmlc/web-data/master/mxnet/image/dist_converge.png" width="600"/>
 
 ## FAQ
 
@@ -293,21 +342,9 @@ aspects:
   - Data preprocessing is done by `opencv`.  If opencv is compiled from source
     codes, check if it is configured correctly.
   - Use `--benchmark 1` to use randomly generated data rather than real data.
-- CPU performance. Check MKL DNN is used
-- Single GPU performace
-  - Check the recent CUDNN is used
-  - Check the environment variable `MXNET_CUDNN_AUTOTUNE_DEFAULT` is set
-    to 1. You can do it by `export MXNET_CUDNN_AUTOTUNE_DEFAULT=1; python
-    train_...`. Note that it is already enabled in default by
-    `common/find_mxnet.py`. Enabling it results 15% speedup in average, but it
-    may cause problems for RNN and bucketing, and also slow down the starting.
-- Multiple GPUs and multi-machine performance. The bottleneck is often on the
-  communication bandwidth, you can use
-  [tools/bandwidth](https://github.com/dmlc/mxnet/tree/master/tools/bandwidth)
-  to find the communication cost per batch. A ideal situation is the cost is
-  less than the time to compute a batch. We can
-  - Explore different `--kv-store` options to reduce the cost
-  - Increase the batch size to improve the computation and communication ratio.
+
+Refer to [how_to/performance](http://mxnet.io/how_to/perf.html) for more details
+about CPU, GPU and multi-device performance.
 
 ### Memory
 

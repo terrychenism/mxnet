@@ -1,8 +1,26 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- * Copyright (c) 2016 by Contributors
  * \file caffe_loss-inl.h
  * \brief Caffe Operator
- * \author Haoran Wang 
+ * \author Haoran Wang
 */
 #ifndef PLUGIN_CAFFE_CAFFE_LOSS_INL_H_
 #define PLUGIN_CAFFE_CAFFE_LOSS_INL_H_
@@ -31,7 +49,8 @@ struct CaffeLossParam : public dmlc::Parameter<CaffeLossParam> {
   int num_data, num_out;
   float grad_scale;
 
-  DMLC_DECLARE_PARAMETER(CaffeLossParam) { DMLC_DECLARE_FIELD(prototxt).set_default("layer{}")
+  DMLC_DECLARE_PARAMETER(CaffeLossParam) {
+    DMLC_DECLARE_FIELD(prototxt).set_default("layer{}")
     .describe("Caffe's layer parameter");
     DMLC_DECLARE_FIELD(num_data).set_range(0, 100).set_default(2)
     .describe("Operator input number");
@@ -100,9 +119,9 @@ class CaffeLoss : public Operator {
                                       param_.num_out);
     CaffeOpSetup();
     if (ctx.is_train)
-      caffeOp_->SetPhase(::caffe::TRAIN);
+      MXCAFFELAYER(caffeOp_, Dtype)->SetPhase(::caffe::TRAIN);
     else
-      caffeOp_->SetPhase(::caffe::TEST);
+      MXCAFFELAYER(caffeOp_, Dtype)->SetPhase(::caffe::TEST);
     caffeOp_->Forward(bot_, top_);
 
 #if defined(__CUDACC__)
@@ -150,7 +169,7 @@ class CaffeLoss : public Operator {
                                       in_grad.begin(),
                                       param_.num_data);
     // Pass grad scale to caffe blob
-    top_[0]->set_cpu_diff(&grad_scale_);
+    MXCAFFEBLOB(top_[0], Dtype)->set_cpu_diff(&grad_scale_);
 
     // Set BP flag
     for (int i = 0; i < param_.num_data; ++i)

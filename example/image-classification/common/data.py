@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import mxnet as mx
 import random
 from mxnet.io import DataBatch, DataIter
@@ -56,22 +73,23 @@ def set_data_aug_level(aug, level):
 
 
 class SyntheticDataIter(DataIter):
-    def __init__(self, num_classes, data_shape, max_iter):
+    def __init__(self, num_classes, data_shape, max_iter, dtype):
         self.batch_size = data_shape[0]
         self.cur_iter = 0
         self.max_iter = max_iter
+        self.dtype = dtype
         label = np.random.randint(0, num_classes, [self.batch_size,])
         data = np.random.uniform(-1, 1, data_shape)
-        self.data = mx.nd.array(data)
-        self.label = mx.nd.array(label)
+        self.data = mx.nd.array(data, dtype=self.dtype, ctx=mx.Context('cpu_pinned', 0))
+        self.label = mx.nd.array(label, dtype=self.dtype, ctx=mx.Context('cpu_pinned', 0))
     def __iter__(self):
         return self
     @property
     def provide_data(self):
-        return [('data',self.data.shape)]
+        return [mx.io.DataDesc('data', self.data.shape, self.dtype)]
     @property
     def provide_label(self):
-        return [('softmax_label',(self.batch_size,))]
+        return [mx.io.DataDesc('softmax_label', (self.batch_size,), self.dtype)]
     def next(self):
         self.cur_iter += 1
         if self.cur_iter <= self.max_iter:
@@ -92,7 +110,7 @@ def get_rec_iter(args, kv=None):
     image_shape = tuple([int(l) for l in args.image_shape.split(',')])
     if 'benchmark' in args and args.benchmark:
         data_shape = (args.batch_size,) + image_shape
-        train = SyntheticDataIter(args.num_classes, data_shape, 50)
+        train = SyntheticDataIter(args.num_classes, data_shape, 500, np.float32)
         return (train, None)
     if kv:
         (rank, nworker) = (kv.rank, kv.num_workers)

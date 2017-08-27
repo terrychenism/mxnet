@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 """A simple demo of new RNN cell with PTB language model."""
 
 ################################################################################
@@ -66,8 +83,8 @@ if __name__ == '__main__':
     contexts = [mx.context.gpu(i) for i in range(1)]
     vocab = default_build_vocab(os.path.join(data_dir, 'ptb.train.txt'))
 
-    init_h = [('LSTM_state', (num_lstm_layer, batch_size, num_hidden))]
-    init_c = [('LSTM_state_cell', (num_lstm_layer, batch_size, num_hidden))]
+    init_h = [mx.io.DataDesc('LSTM_state', (num_lstm_layer, batch_size, num_hidden), layout='TNC')]
+    init_c = [mx.io.DataDesc('LSTM_state_cell', (num_lstm_layer, batch_size, num_hidden), layout='TNC')]
     init_states = init_c + init_h
 
     data_train = BucketSentenceIter(os.path.join(data_dir, 'ptb.train.txt'),
@@ -100,7 +117,7 @@ if __name__ == '__main__':
         # RNN cell takes input of shape (time, batch, feature)
         rnn = mx.sym.RNN(data=embed, state_size=num_hidden,
                          num_layers=num_lstm_layer, mode='lstm',
-                         name='LSTM', 
+                         name='LSTM',
                          # The following params can be omitted
                          # provided we do not need to apply the
                          # workarounds mentioned above
@@ -134,7 +151,7 @@ if __name__ == '__main__':
     if len(buckets) == 1:
         mod = mx.mod.Module(*sym_gen(buckets[0]), context=contexts)
     else:
-        mod = mx.mod.BucketingModule(sym_gen, 
+        mod = mx.mod.BucketingModule(sym_gen,
                                      default_bucket_key=data_train.default_bucket_key,
                                      context=contexts)
 
