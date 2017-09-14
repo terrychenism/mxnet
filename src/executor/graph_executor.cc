@@ -215,6 +215,7 @@ nnvm::Graph GraphExecutor::InitFullGraph(
     if (get_node_attr(node, "__force_mirroring__", false)) return true;
     if (do_mirror == 0) return false;
     if (type == "Convolution") return false;
+    if (type == "DeformableConvolution") return false;
     if (type == "FullyConnected") return false;
     if (type == "Concat") return false;
     if (type == "SoftmaxOutput") return false;
